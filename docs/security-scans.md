@@ -1,0 +1,511 @@
+# Security Scanning Documentation
+
+## Overview
+
+This project implements a comprehensive DevSecOps approach with multiple security scanning tools integrated into the CI/CD pipeline. Security checks are automated and run on every build.
+
+## Pipeline Security Gates
+
+```
+Code Commit → SAST → Dependency Check → IaC Scan → Build → Container Scan → Deploy → DAST
+                ↓         ↓               ↓                      ↓              ↓
+            SonarQube    Snyk         Checkov/tfsec           Trivy        OWASP ZAP
+```
+
+## 1. SAST (Static Application Security Testing)
+
+### SonarQube
+
+**Purpose**: Analyze source code for security vulnerabilities, code smells, and technical debt.
+
+**What it Detects**:
+- SQL Injection vulnerabilities
+- Cross-Site Scripting (XSS)
+- Path traversal issues
+- Hardcoded credentials
+- Insecure cryptography
+- Authentication/Authorization flaws
+- Code quality issues
+
+**Configuration**:
+```properties
+# sonar-project.properties
+sonar.projectKey=aws-devops-portfolio
+sonar.sources=./application
+sonar.exclusions=**/node_modules/**,**/*.test.js
+sonar.javascript.lcov.reportPaths=coverage/lcov.info
+```
+
+**Jenkins Integration**:
+```groovy
+stage('SAST - SonarQube') {
+    steps {
+        script {
+            def scannerHome = tool 'SonarQube Scanner'
+            withSonarQubeEnv('SonarQube') {
+                sh "${scannerHome}/bin/sonar-scanner"
+            }
+        }
+    }
+}
+
+stage('Quality Gate') {
+    steps {
+        timeout(time: 5, unit: 'MINUTES') {
+            waitForQualityGate abortPipeline: true
+        }
+    }
+}
+```
+
+**Quality Gates**:
+- Security Rating: A
+- Reliability Rating: A
+- Maintainability Rating: A
+- Code Coverage: > 80%
+- Duplicated Lines: < 3%
+
+### Snyk (Dependency Scanning)
+
+**Purpose**: Scan dependencies for known vulnerabilities.
+
+**What it Detects**:
+- Vulnerable npm/pip/maven packages
+- License compliance issues
+- Outdated dependencies with known CVEs
+- Transitive dependency vulnerabilities
+
+**Jenkins Integration**:
+```groovy
+stage('Dependency Check - Snyk') {
+    steps {
+        script {
+            snykSecurity(
+                snykInstallation: 'Snyk',
+                snykTokenId: 'snyk-api-token',
+                severity: 'high',
+                failOnIssues: true
+            )
+        }
+    }
+}
+```
+
+**Command Line Usage**:
+```bash
+# Scan Node.js dependencies
+snyk test --severity-threshold=high
+
+# Scan and fix vulnerabilities
+snyk fix
+
+# Monitor project
+snyk monitor
+```
+
+## 2. Infrastructure as Code Scanning
+
+### Checkov (Multi-IaC Scanner)
+
+**Purpose**: Scan Terraform, CloudFormation, and Kubernetes manifests for security misconfigurations.
+
+**What it Detects**:
+- Unencrypted storage
+- Public S3 buckets
+- Open security groups
+- Missing logging
+- Insecure IAM policies
+- Unencrypted RDS instances
+- Missing backup configurations
+
+**Jenkins Integration**:
+```groovy
+stage('IaC Scan - Checkov') {
+    steps {
+        sh '''
+            pip3 install checkov
+            checkov -d infrastructure/terraform \
+                --framework terraform \
+                --output junitxml \
+                --soft-fail-on MEDIUM \
+                --hard-fail-on HIGH,CRITICAL
+        '''
+    }
+}
+```
+
+**Example Checks**:
+```python
+# Check if S3 bucket has encryption
+CKV_AWS_19: "Ensure all data stored in the S3 bucket is securely encrypted at rest"
+
+# Check if RDS has backup retention
+CKV_AWS_133: "Ensure that RDS instances have backup policy"
+
+# Check if security group is not open to 0.0.0.0/0
+CKV_AWS_24: "Ensure no security groups allow ingress from 0.0.0.0:0 to port 22"
+```
+
+**Configuration**:
+```yaml
+# .checkov.yml
+framework:
+  - terraform
+  - cloudformation
+  - kubernetes
+
+skip-check:
+  - CKV_AWS_20  # Skip specific check with justification
+
+hard-fail-on:
+  - HIGH
+  - CRITICAL
+
+soft-fail-on:
+  - MEDIUM
+```
+
+### tfsec (Terraform-specific Scanner)
+
+**Purpose**: Specialized security scanner for Terraform with deep AWS knowledge.
+
+**Jenkins Integration**:
+```groovy
+stage('IaC Scan - tfsec') {
+    steps {
+        sh '''
+            curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+            tfsec infrastructure/terraform \
+                --minimum-severity HIGH \
+                --format junit > tfsec-report.xml
+        '''
+        junit 'tfsec-report.xml'
+    }
+}
+```
+
+**Example Findings**:
+- AWS001: S3 Bucket has an ACL defined which allows public access
+- AWS002: Resource 'aws_s3_bucket.example' does not have logging enabled
+- AWS018: Resource 'aws_security_group.example' should include a description
+- AWS079: Resource 'aws_instance.example' is missing `metadata_options`
+
+## 3. Container Image Scanning
+
+### Trivy (Container Vulnerability Scanner)
+
+**Purpose**: Scan Docker images for OS and application vulnerabilities before deployment.
+
+**What it Detects**:
+- OS package vulnerabilities (Alpine, Ubuntu, etc.)
+- Application dependency vulnerabilities
+- IaC misconfigurations in Dockerfiles
+- Secrets in container images
+- License issues
+
+**Jenkins Integration**:
+```groovy
+stage('Container Scan - Trivy') {
+    steps {
+        sh '''
+            # Install Trivy
+            wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+            echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+            sudo apt-get update
+            sudo apt-get install trivy
+
+            # Scan images
+            trivy image --severity HIGH,CRITICAL \
+                --exit-code 1 \
+                --format json \
+                --output trivy-report.json \
+                ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+        '''
+    }
+}
+```
+
+**Scan Modes**:
+```bash
+# Scan image before push
+trivy image myapp:latest
+
+# Scan with specific severity
+trivy image --severity HIGH,CRITICAL myapp:latest
+
+# Scan filesystem (useful for build context)
+trivy fs --security-checks vuln,config .
+
+# Scan and ignore unfixed vulnerabilities
+trivy image --ignore-unfixed myapp:latest
+
+# Generate report
+trivy image --format json --output report.json myapp:latest
+```
+
+**Example Output**:
+```
+myapp:latest (alpine 3.18)
+==========================
+Total: 15 (HIGH: 8, CRITICAL: 7)
+
+┌────────────────┬────────────────┬──────────┬────────────────┬───────────────────┐
+│   Library      │ Vulnerability  │ Severity │ Installed Ver. │   Fixed Version   │
+├────────────────┼────────────────┼──────────┼────────────────┼───────────────────┤
+│ openssl        │ CVE-2023-12345 │ CRITICAL │ 1.1.1k         │ 1.1.1t            │
+│ nginx          │ CVE-2023-67890 │ HIGH     │ 1.20.1         │ 1.22.0            │
+└────────────────┴────────────────┴──────────┴────────────────┴───────────────────┘
+```
+
+## 4. DAST (Dynamic Application Security Testing)
+
+### OWASP ZAP (Zed Attack Proxy)
+
+**Purpose**: Test running application for vulnerabilities through active scanning.
+
+**What it Detects**:
+- SQL Injection
+- Cross-Site Scripting (XSS)
+- Cross-Site Request Forgery (CSRF)
+- Security misconfigurations
+- Sensitive data exposure
+- Broken authentication
+- XML External Entities (XXE)
+- Insecure deserialization
+
+**Jenkins Integration**:
+```groovy
+stage('DAST - OWASP ZAP') {
+    steps {
+        sh '''
+            docker run -v $(pwd):/zap/wrk/:rw \
+                -t owasp/zap2docker-stable \
+                zap-baseline.py \
+                -t ${APP_URL} \
+                -g gen.conf \
+                -r zap-report.html \
+                -J zap-report.json \
+                || true
+        '''
+        publishHTML([
+            reportName: 'ZAP Scan',
+            reportDir: '.',
+            reportFiles: 'zap-report.html'
+        ])
+    }
+}
+```
+
+**Scan Modes**:
+
+1. **Baseline Scan** (Passive)
+```bash
+docker run -t owasp/zap2docker-stable \
+    zap-baseline.py -t https://myapp.com
+```
+
+2. **Full Scan** (Active - use carefully)
+```bash
+docker run -t owasp/zap2docker-stable \
+    zap-full-scan.py -t https://myapp.com
+```
+
+3. **API Scan**
+```bash
+docker run -t owasp/zap2docker-stable \
+    zap-api-scan.py -t https://api.myapp.com/openapi.json \
+        -f openapi
+```
+
+**ZAP Configuration**:
+```conf
+# gen.conf
+# Passive scan rules
+10010 # Cookie No HttpOnly Flag
+10011 # Cookie Without Secure Flag
+10015 # Incomplete or No Cache-control
+10017 # Cross-Domain JavaScript Source File Inclusion
+10019 # Content-Type Header Missing
+10020 # X-Frame-Options Header Not Set
+10021 # X-Content-Type-Options Header Missing
+```
+
+## Pipeline Configuration
+
+### Complete Security Pipeline (Jenkinsfile)
+
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        SONAR_TOKEN = credentials('sonar-token')
+        SNYK_TOKEN = credentials('snyk-token')
+        ECR_REGISTRY = '123456789012.dkr.ecr.us-east-1.amazonaws.com'
+        IMAGE_NAME = 'devops-app'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Security Scans') {
+            parallel {
+                stage('SAST - SonarQube') {
+                    steps {
+                        script {
+                            def scannerHome = tool 'SonarQube Scanner'
+                            withSonarQubeEnv('SonarQube') {
+                                sh "${scannerHome}/bin/sonar-scanner"
+                            }
+                        }
+                    }
+                }
+
+                stage('Dependency Check - Snyk') {
+                    steps {
+                        sh '''
+                            snyk test \
+                                --severity-threshold=high \
+                                --json > snyk-report.json || true
+                        '''
+                    }
+                }
+
+                stage('IaC Scan') {
+                    steps {
+                        sh './jenkins/scripts/iac-scan.sh'
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                sh '''
+                    docker-compose build
+                '''
+            }
+        }
+
+        stage('Container Scan - Trivy') {
+            steps {
+                sh './jenkins/scripts/container-scan.sh'
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                sh '''
+                    aws ecr get-login-password --region us-east-1 | \
+                        docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                    docker tag frontend:latest ${ECR_REGISTRY}/frontend:${IMAGE_TAG}
+                    docker tag backend:latest ${ECR_REGISTRY}/backend:${IMAGE_TAG}
+                    docker push ${ECR_REGISTRY}/frontend:${IMAGE_TAG}
+                    docker push ${ECR_REGISTRY}/backend:${IMAGE_TAG}
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh './jenkins/scripts/deploy.sh'
+            }
+        }
+
+        stage('DAST - OWASP ZAP') {
+            steps {
+                sh './jenkins/scripts/dast-scan.sh'
+            }
+        }
+    }
+
+    post {
+        always {
+            junit allowEmptyResults: true, testResults: '**/test-results/*.xml'
+            archiveArtifacts artifacts: '**/reports/*', allowEmptyArchive: true
+        }
+        failure {
+            emailext (
+                subject: "Pipeline Failed: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
+                body: "Check console output at ${env.BUILD_URL}",
+                to: "team@example.com"
+            )
+        }
+    }
+}
+```
+
+## Security Scan Results Dashboard
+
+### Recommended Metrics to Track
+
+1. **Vulnerability Trends**
+   - Total vulnerabilities over time
+   - Critical/High/Medium/Low breakdown
+   - Time to remediation
+
+2. **Code Quality Metrics**
+   - Code coverage percentage
+   - Technical debt ratio
+   - Code duplication
+
+3. **Compliance Metrics**
+   - Failed security checks
+   - Policy violations
+   - License compliance issues
+
+4. **Container Security**
+   - Vulnerable images count
+   - Average CVE score
+   - Outdated base images
+
+## Remediation Workflow
+
+1. **Scan Failure** → Pipeline stops
+2. **Review Report** → Analyze findings in Jenkins/SonarQube
+3. **Triage** → Determine severity and impact
+4. **Fix** → Apply security patches or code changes
+5. **Verify** → Re-run scans
+6. **Deploy** → Continue pipeline
+
+## Best Practices
+
+1. **Fail Fast**: Run quick scans (SAST, IaC) before expensive builds
+2. **Parallel Scanning**: Run independent scans in parallel
+3. **Incremental Scanning**: Only scan changed files when possible
+4. **Threshold Management**: Set appropriate failure thresholds
+5. **Regular Updates**: Keep scanning tools updated
+6. **False Positive Management**: Maintain suppression lists
+7. **Developer Training**: Educate team on secure coding
+8. **Shift Left**: Run scans locally before commit
+
+## Tool Comparison
+
+| Tool | Type | Speed | Accuracy | False Positives | Cost |
+|------|------|-------|----------|-----------------|------|
+| SonarQube | SAST | Medium | High | Low | Free (CE) |
+| Snyk | SCA | Fast | Very High | Very Low | Freemium |
+| Checkov | IaC | Fast | High | Low | Free |
+| tfsec | IaC | Very Fast | High | Low | Free |
+| Trivy | Container | Fast | High | Low | Free |
+| OWASP ZAP | DAST | Slow | Medium | Medium | Free |
+
+## Resources
+
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [CWE Top 25](https://cwe.mitre.org/top25/)
+- [AWS Security Best Practices](https://aws.amazon.com/architecture/security-identity-compliance/)
+- [DevSecOps Manifesto](https://www.devsecops.org/)

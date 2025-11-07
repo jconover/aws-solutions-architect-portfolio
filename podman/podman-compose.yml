@@ -1,0 +1,91 @@
+# Podman Compose Configuration for DevOps Portfolio
+# Usage: podman-compose up -d
+#
+# This is compatible with both docker-compose and podman-compose
+# Containers communicate via the shared network 'devops-network'
+
+version: '3.8'
+
+services:
+  postgres:
+    container_name: devops-postgres
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: devops_portfolio
+      POSTGRES_USER: dbadmin
+      POSTGRES_PASSWORD: securepassword123
+    ports:
+      - "5433:5432"  # Using 5433 to avoid conflicts
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../application/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbadmin -d devops_portfolio"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - devops-network
+    restart: unless-stopped
+
+  backend:
+    container_name: devops-backend
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    image: localhost/docker-backend:latest
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: devops_portfolio
+      DB_USER: dbadmin
+      DB_PASSWORD: securepassword123
+    ports:
+      - "3001:3000"  # Using 3001 to avoid conflicts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - devops-network
+    restart: unless-stopped
+
+  frontend:
+    container_name: devops-frontend
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    image: localhost/docker-frontend:latest
+    environment:
+      BACKEND_URL: http://backend:3000
+    ports:
+      - "8081:80"  # Using 8081 to avoid conflicts with other deployments
+    volumes:
+      - ./nginx-podman.conf:/etc/nginx/conf.d/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - devops-network
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  devops-network:
+    driver: bridge

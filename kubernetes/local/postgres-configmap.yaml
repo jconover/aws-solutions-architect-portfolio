@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: devops-portfolio
+data:
+  init.sql: |
+    -- Database initialization script
+    -- Creates tables and initial data for the application
+
+    -- Create items table
+    CREATE TABLE IF NOT EXISTS items (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create index on created_at for sorting
+    CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC);
+
+    -- Insert sample data
+    INSERT INTO items (name, description) VALUES
+        ('AWS EC2', 'Elastic Compute Cloud - Virtual servers in the cloud'),
+        ('AWS S3', 'Simple Storage Service - Object storage service'),
+        ('AWS ECS', 'Elastic Container Service - Container orchestration'),
+        ('AWS EKS', 'Elastic Kubernetes Service - Managed Kubernetes'),
+        ('Jenkins', 'CI/CD automation server'),
+        ('Terraform', 'Infrastructure as Code tool'),
+        ('Docker', 'Container platform'),
+        ('SonarQube', 'Code quality and security analysis'),
+        ('Trivy', 'Container security scanner'),
+        ('OWASP ZAP', 'Web application security scanner')
+    ON CONFLICT DO NOTHING;
+
+    -- Create function to update updated_at timestamp
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+    END;
+    $$ language 'plpgsql';
+
+    -- Create trigger for updated_at
+    DROP TRIGGER IF EXISTS update_items_updated_at ON items;
+    CREATE TRIGGER update_items_updated_at
+        BEFORE UPDATE ON items
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();

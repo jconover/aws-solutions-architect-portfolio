@@ -1,0 +1,290 @@
+// Main Jenkins Pipeline with Security Scanning
+// This pipeline demonstrates DevSecOps practices with multiple security tools
+
+pipeline {
+    agent any
+
+    environment {
+        // AWS Configuration
+        AWS_REGION = 'us-east-1'
+        AWS_ACCOUNT_ID = credentials('aws-account-id')
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+        // Project Configuration
+        PROJECT_NAME = 'devops-portfolio'
+        IMAGE_TAG = "${BUILD_NUMBER}"
+
+        // Docker Images
+        FRONTEND_IMAGE = "${ECR_REGISTRY}/${PROJECT_NAME}/frontend"
+        BACKEND_IMAGE = "${ECR_REGISTRY}/${PROJECT_NAME}/backend"
+
+        // Security Tools
+        SONAR_TOKEN = credentials('sonar-token')
+        SNYK_TOKEN = credentials('snyk-token')
+
+        // Application URL (set after deployment)
+        APP_URL = "http://your-alb-dns-name.us-east-1.elb.amazonaws.com"
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '=== Checking out source code ==='
+                checkout scm
+
+                script {
+                    // Get commit info for tagging
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Building commit: ${env.GIT_COMMIT_SHORT}"
+                }
+            }
+        }
+
+        stage('Security Scans - Static Analysis') {
+            parallel {
+                stage('SAST - SonarQube') {
+                    steps {
+                        echo '=== Running SonarQube Analysis ==='
+                        script {
+                            def scannerHome = tool 'SonarQube Scanner'
+                            withSonarQubeEnv('SonarQube') {
+                                sh """
+                                    ${scannerHome}/bin/sonar-scanner \
+                                        -Dsonar.projectKey=${PROJECT_NAME} \
+                                        -Dsonar.sources=./application \
+                                        -Dsonar.exclusions=**/node_modules/**,**/*.test.js \
+                                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+                                """
+                            }
+                        }
+                    }
+                }
+
+                stage('Dependency Check - Snyk') {
+                    steps {
+                        echo '=== Running Snyk Dependency Scan ==='
+                        dir('application/frontend') {
+                            sh '''
+                                npm install snyk -g
+                                snyk auth ${SNYK_TOKEN}
+                                snyk test --severity-threshold=high --json > ../../snyk-frontend-report.json || true
+                            '''
+                        }
+                        dir('application/backend') {
+                            sh '''
+                                snyk test --severity-threshold=high --json > ../../snyk-backend-report.json || true
+                            '''
+                        }
+                    }
+                }
+
+                stage('IaC Security Scan') {
+                    steps {
+                        echo '=== Running Infrastructure Security Scans ==='
+                        sh '''
+                            chmod +x ./jenkins/scripts/iac-scan.sh
+                            ./jenkins/scripts/iac-scan.sh
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                echo '=== Waiting for SonarQube Quality Gate ==='
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                echo '=== Building Docker Images ==='
+                script {
+                    // Build frontend
+                    sh """
+                        cd docker/frontend
+                        docker build -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
+                                     -t ${FRONTEND_IMAGE}:latest \
+                                     -f Dockerfile ../../application/frontend
+                    """
+
+                    // Build backend
+                    sh """
+                        cd docker/backend
+                        docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} \
+                                     -t ${BACKEND_IMAGE}:latest \
+                                     -f Dockerfile ../../application/backend
+                    """
+                }
+            }
+        }
+
+        stage('Container Security Scan') {
+            steps {
+                echo '=== Running Trivy Container Scan ==='
+                sh '''
+                    chmod +x ./jenkins/scripts/container-scan.sh
+                    ./jenkins/scripts/container-scan.sh
+                '''
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                echo '=== Pushing Docker Images to ECR ==='
+                script {
+                    sh """
+                        # Login to ECR
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                            docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+                        # Push frontend
+                        docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                        docker push ${FRONTEND_IMAGE}:latest
+
+                        # Push backend
+                        docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
+                        docker push ${BACKEND_IMAGE}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Deploy') {
+            parallel {
+                stage('Deploy to ECS') {
+                    steps {
+                        echo '=== Deploying to ECS ==='
+                        build job: 'Deploy-to-ECS', parameters: [
+                            string(name: 'IMAGE_TAG', value: "${IMAGE_TAG}"),
+                            string(name: 'FRONTEND_IMAGE', value: "${FRONTEND_IMAGE}:${IMAGE_TAG}"),
+                            string(name: 'BACKEND_IMAGE', value: "${BACKEND_IMAGE}:${IMAGE_TAG}")
+                        ]
+                    }
+                }
+
+                stage('Deploy to EKS') {
+                    when {
+                        expression { return params.DEPLOY_TO_EKS }
+                    }
+                    steps {
+                        echo '=== Deploying to EKS ==='
+                        build job: 'Deploy-to-EKS', parameters: [
+                            string(name: 'IMAGE_TAG', value: "${IMAGE_TAG}"),
+                            string(name: 'FRONTEND_IMAGE', value: "${FRONTEND_IMAGE}:${IMAGE_TAG}"),
+                            string(name: 'BACKEND_IMAGE', value: "${BACKEND_IMAGE}:${IMAGE_TAG}")
+                        ]
+                    }
+                }
+            }
+        }
+
+        stage('DAST - Security Testing') {
+            steps {
+                echo '=== Running OWASP ZAP Scan ==='
+                script {
+                    // Wait for deployment to stabilize
+                    sleep time: 30, unit: 'SECONDS'
+
+                    sh '''
+                        chmod +x ./jenkins/scripts/dast-scan.sh
+                        ./jenkins/scripts/dast-scan.sh
+                    '''
+                }
+            }
+        }
+
+        stage('Generate Security Report') {
+            steps {
+                echo '=== Generating Security Reports ==='
+                script {
+                    sh '''
+                        mkdir -p reports
+
+                        echo "Security Scan Summary for Build ${BUILD_NUMBER}" > reports/security-summary.txt
+                        echo "=======================================" >> reports/security-summary.txt
+                        echo "" >> reports/security-summary.txt
+
+                        echo "SAST (SonarQube): Check SonarQube dashboard" >> reports/security-summary.txt
+                        echo "Dependency Scan (Snyk): See attached reports" >> reports/security-summary.txt
+                        echo "IaC Scan: See checkov/tfsec reports" >> reports/security-summary.txt
+                        echo "Container Scan: See Trivy reports" >> reports/security-summary.txt
+                        echo "DAST (OWASP ZAP): See ZAP report" >> reports/security-summary.txt
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo '=== Cleaning up ==='
+
+            // Archive security reports
+            archiveArtifacts artifacts: 'reports/**,**/trivy-*.json,**/snyk-*.json,**/zap-*.html', allowEmptyArchive: true
+
+            // Publish HTML reports
+            publishHTML([
+                reportName: 'OWASP ZAP Report',
+                reportDir: 'reports',
+                reportFiles: 'zap-report.html',
+                allowMissing: true
+            ])
+
+            // Clean up Docker images
+            sh """
+                docker rmi ${FRONTEND_IMAGE}:${IMAGE_TAG} || true
+                docker rmi ${BACKEND_IMAGE}:${IMAGE_TAG} || true
+                docker system prune -f
+            """
+        }
+
+        success {
+            echo '=== Pipeline Completed Successfully ==='
+            emailext (
+                subject: "SUCCESS: Build #${BUILD_NUMBER} - ${PROJECT_NAME}",
+                body: """
+                    Build #${BUILD_NUMBER} completed successfully!
+
+                    Commit: ${env.GIT_COMMIT_SHORT}
+                    Duration: ${currentBuild.durationString}
+
+                    All security scans passed.
+
+                    View details: ${BUILD_URL}
+                """,
+                to: 'team@example.com'
+            )
+        }
+
+        failure {
+            echo '=== Pipeline Failed ==='
+            emailext (
+                subject: "FAILURE: Build #${BUILD_NUMBER} - ${PROJECT_NAME}",
+                body: """
+                    Build #${BUILD_NUMBER} failed!
+
+                    Commit: ${env.GIT_COMMIT_SHORT}
+
+                    Check security scan results or build logs.
+
+                    View details: ${BUILD_URL}
+                """,
+                to: 'team@example.com'
+            )
+        }
+    }
+}

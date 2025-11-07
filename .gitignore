@@ -1,0 +1,265 @@
+# AWS Solutions Architect Portfolio - .gitignore
+
+# ====================
+# Secrets & Credentials
+# ====================
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+*.password
+*credentials*
+*secret*
+.env
+.env.*
+!.env.example
+credentials.json
+secrets.yml
+
+# AWS credentials
+.aws/
+aws-credentials.json
+
+# ====================
+# Terraform
+# ====================
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+!terraform.tfvars.example
+.terraform.lock.hcl
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Terraform outputs
+outputs.txt
+terraform-outputs.json
+
+# ====================
+# Docker & Containers
+# ====================
+docker-compose.override.yml
+
+# ====================
+# Podman
+# ====================
+podman/nginx-pod.conf
+
+# ====================
+# Kubernetes
+# ====================
+# Kubeconfig files
+kubeconfig
+*.kubeconfig
+.kube/config.local
+
+# Kubernetes secrets (local only)
+*-secret.yaml
+!*-secret.yaml.example
+
+# ====================
+# Node.js
+# ====================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.npm
+package-lock.json
+yarn.lock
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+*.min.js
+*.min.css
+
+# ====================
+# Python
+# ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+.venv/
+venv/
+ENV/
+env/
+
+# ====================
+# Jenkins
+# ====================
+.jenkins/
+jenkins_home/
+jenkins-data/
+jenkins/workspace/
+jenkins/builds/
+jenkins/jobs/*/builds/
+jenkins/secrets/
+
+# ====================
+# Security Scanning
+# ====================
+# SonarQube
+.sonar/
+.scannerwork/
+
+# Trivy reports
+trivy-*.json
+trivy-*.html
+
+# Snyk reports
+snyk-*.json
+
+# OWASP ZAP reports
+zap-*.html
+zap-*.json
+zap-*.xml
+
+# Checkov reports
+checkov-*.json
+checkov-*.xml
+
+# tfsec reports
+tfsec-*.json
+tfsec-*.xml
+
+# All security scan reports
+*-scan-report.*
+security-reports/
+reports/
+
+# ====================
+# IDEs & Editors
+# ====================
+# VSCode
+.vscode/
+!.vscode/settings.json.example
+*.code-workspace
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ====================
+# Operating System
+# ====================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+.directory
+.Trash-*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ====================
+# Logs & Temporary Files
+# ====================
+logs/
+*.log
+*.log.*
+*.tmp
+*.temp
+*.bak
+*.cache
+.cache/
+temp/
+tmp/
+
+# Application logs
+application/backend/logs/
+application/frontend/logs/
+
+# ====================
+# Database
+# ====================
+*.sql.backup
+*.dump
+pgdata/
+postgres-data/
+*.sql.gz
+database-backup/
+
+# ====================
+# Testing
+# ====================
+coverage/
+.nyc_output/
+*.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.hypothesis/
+
+# ====================
+# Build Artifacts
+# ====================
+*.tar
+*.tar.gz
+*.zip
+*.jar
+*.war
+*.ear
+
+# ====================
+# Backup Files
+# ====================
+*.backup
+*.old
+*.orig
+*.rej
+
+# ====================
+# Report Files (specific formats)
+# ====================
+*.json
+*.html
+*.xml
+
+# But keep important project files
+!package.json
+!package-lock.json
+!tsconfig.json
+!jest.config.json
+!.eslintrc.json
+!**/infrastructure/**/*.json
+!**/jenkins/**/*.json
+!**/application/**/*.json
+
+# Keep documentation
+!README.md
+!GETTING_STARTED.md
+!CLAUDE.md
+!docs/**/*.md

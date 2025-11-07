@@ -1,0 +1,32 @@
+# Example Terraform Variables File
+# Copy this file to terraform.tfvars and update with your values
+
+project_name = "devops-portfolio"
+environment  = "dev"
+aws_region   = "us-east-1"
+
+# VPC Configuration
+vpc_cidr           = "10.20.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Network settings - Use single NAT for cost optimization in dev
+single_nat_gateway = true
+enable_s3_endpoint = true
+
+# ECS Configuration - Enable Spot for cost savings
+enable_fargate_spot = true
+fargate_spot_weight = 50
+
+# Database Configuration
+db_instance_class = "db.t3.micro"
+db_name           = "appdb"
+db_username       = "dbadmin"
+# db_password     = "SET_THIS_VIA_ENV_VAR" # Use TF_VAR_db_password
+
+# Retention settings
+artifacts_retention_days = 30
+logs_retention_days      = 90
+backups_retention_days   = 30
+
+# Enable EKS (set to true when ready)
+enable_eks = false
