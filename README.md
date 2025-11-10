@@ -39,7 +39,8 @@ The Jenkins pipeline includes comprehensive security checks:
    - Snyk for dependency vulnerability scanning
 
 2. **Container Scanning**
-   - Trivy for Docker image vulnerability scanning
+   - AWS ECR automated scanning (scan-on-push enabled)
+   - Trivy for pre-push Docker image vulnerability scanning
    - Reports CVEs and misconfigurations
 
 3. **IaC Scanning**
@@ -50,6 +51,8 @@ The Jenkins pipeline includes comprehensive security checks:
 4. **DAST (Dynamic Application Security Testing)**
    - OWASP ZAP for runtime security testing
    - API security testing
+
+**Current Security Status**: Backend image has 1 HIGH and 2 MEDIUM OpenSSL vulnerabilities. See [ECR Setup Guide](docs/ECR_SETUP.md) for details and remediation steps.
 
 ## Project Structure
 
@@ -109,13 +112,37 @@ aws cloudformation create-stack \
   --template-body file://vpc.yaml
 ```
 
-### 2. Application Deployment
+### 2. Container Registry Setup (ECR)
+
+#### Create ECR Repositories
+```bash
+# Create repositories
+aws ecr create-repository --repository-name cloudforge/backend --image-scanning-configuration scanOnPush=true
+aws ecr create-repository --repository-name cloudforge/frontend --image-scanning-configuration scanOnPush=true
+```
+
+#### Build and Push Images
+```bash
+# Using the automated script (recommended)
+cd infrastructure/cloudformation/scripts
+./push-to-ecr.sh
+
+# Or manually
+cd docker
+docker-compose build
+docker tag docker-backend:latest ${ECR_REGISTRY}/cloudforge/backend:latest
+docker tag docker-frontend:latest ${ECR_REGISTRY}/cloudforge/frontend:latest
+docker push ${ECR_REGISTRY}/cloudforge/backend:latest
+docker push ${ECR_REGISTRY}/cloudforge/frontend:latest
+```
+
+**Note**: Images are automatically scanned for vulnerabilities on push. See [ECR Setup Guide](docs/ECR_SETUP.md) for detailed instructions and security scan information.
+
+### 3. Application Deployment
 
 #### Deploy to ECS
 ```bash
-# Build and push Docker images
-docker-compose build
-docker-compose push
+# Build and push Docker images (see section 2)
 
 # Deploy via Jenkins or manual
 aws ecs update-service --cluster app-cluster --service app-service --force-new-deployment
@@ -131,7 +158,7 @@ kubectl apply -f kubernetes/deployments/
 kubectl apply -f kubernetes/services/
 ```
 
-### 3. Jenkins Setup
+### 4. Jenkins Setup
 
 1. Launch Jenkins on EC2 or local
 2. Install required plugins:
@@ -159,12 +186,21 @@ kubectl apply -f kubernetes/services/
 # Container scanning with Trivy
 ./jenkins/scripts/container-scan.sh
 
+# ECR image scanning (after pushing to ECR)
+aws ecr describe-image-scan-findings \
+  --repository-name cloudforge/backend \
+  --image-id imageTag=latest
+
 # IaC scanning
 ./jenkins/scripts/iac-scan.sh
 
 # DAST with OWASP ZAP
 ./jenkins/scripts/dast-scan.sh
 ```
+
+**Documentation**:
+- [Security Scanning Details](docs/security-scans.md) - Comprehensive guide to all security tools
+- [ECR Setup & Security](docs/ECR_SETUP.md) - Container registry and vulnerability management
 
 ## Cost Optimization
 

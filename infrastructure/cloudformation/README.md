@@ -202,6 +202,159 @@ cd infrastructure/cloudformation/scripts
 - High connection count (> 80% of max)
 - Low free storage (< 2GB)
 
+### ECR (Elastic Container Registry) - Docker Image Storage
+
+While not yet implemented as a CloudFormation stack, ECR repositories are required for storing and deploying Docker images to ECS/EKS.
+
+**Manual Setup (until ECR stack is created):**
+
+```bash
+# Create ECR repositories
+aws ecr create-repository \
+  --repository-name cloudforge/backend \
+  --image-scanning-configuration scanOnPush=true \
+  --region us-east-1
+
+aws ecr create-repository \
+  --repository-name cloudforge/frontend \
+  --image-scanning-configuration scanOnPush=true \
+  --region us-east-1
+```
+
+**Push Docker Images to ECR:**
+
+Use the provided script for automated image tagging and pushing:
+
+```bash
+cd infrastructure/cloudformation/scripts
+./push-to-ecr.sh
+```
+
+The script will:
+1. Login to ECR
+2. Detect local Docker images
+3. Tag images with both `latest` and timestamp tags
+4. Push to ECR repositories
+5. Trigger automatic security scans
+
+**Manual Push Process:**
+
+```bash
+# Set variables
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+AWS_REGION="us-east-1"
+ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+# Login to ECR
+aws ecr get-login-password --region ${AWS_REGION} | \
+  docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+# Tag and push frontend
+docker tag docker-frontend:latest ${ECR_REGISTRY}/cloudforge/frontend:latest
+docker push ${ECR_REGISTRY}/cloudforge/frontend:latest
+
+# Tag and push backend
+docker tag docker-backend:latest ${ECR_REGISTRY}/cloudforge/backend:latest
+docker push ${ECR_REGISTRY}/cloudforge/backend:latest
+```
+
+**Security Scanning:**
+
+ECR automatically scans images on push when `scanOnPush=true` is enabled. View scan results:
+
+```bash
+# View vulnerability summary
+aws ecr describe-image-scan-findings \
+  --repository-name cloudforge/backend \
+  --image-id imageTag=latest \
+  --region us-east-1 \
+  --query 'imageScanFindings.findingSeverityCounts'
+
+# View detailed findings
+aws ecr describe-image-scan-findings \
+  --repository-name cloudforge/backend \
+  --image-id imageTag=latest \
+  --region us-east-1 \
+  --query 'imageScanFindings.findings[?severity==`HIGH` || severity==`CRITICAL`]'
+```
+
+**Known Security Findings (as of deployment):**
+
+Backend image scan detected OpenSSL vulnerabilities in the Alpine Linux base image:
+
+- **CVE-2025-9230 (HIGH)**: CMS password-based encryption vulnerability
+  - Impact: Potential DoS or code execution
+  - Mitigation: Update to newer Alpine image when available
+  - Risk: Low (feature rarely used)
+
+- **CVE-2025-9231 (MEDIUM)**: SM2 signature timing side-channel
+  - Impact: Potential private key recovery on ARM64
+  - Mitigation: Update Alpine base or disable SM2 if not needed
+  - Risk: Low (requires custom TLS provider)
+
+- **CVE-2025-9232 (MEDIUM)**: HTTP client no_proxy vulnerability
+  - Impact: DoS via out-of-bounds read
+  - Mitigation: Update Alpine base
+  - Risk: Low (requires specific environment config)
+
+**Recommended Actions:**
+
+1. **Monitor for Updates**: Watch for Alpine Linux security updates
+   ```bash
+   # Check for newer Alpine images
+   docker pull alpine:3.19
+   docker pull alpine:3.20
+   ```
+
+2. **Rebuild Images**: Update Dockerfile base image and rebuild
+   ```dockerfile
+   # In docker/backend/Dockerfile and docker/frontend/Dockerfile
+   FROM node:18-alpine3.20  # Update to latest secure version
+   ```
+
+3. **Rescan Regularly**: Set up automated scanning in CI/CD
+   ```bash
+   # Add to Jenkins pipeline
+   aws ecr start-image-scan \
+     --repository-name cloudforge/backend \
+     --image-id imageTag=latest
+   ```
+
+4. **Review CVE Details**: Assess actual risk based on your usage
+   - If not using CMS encryption: CVE-2025-9230 is not relevant
+   - If not on ARM64 platform: CVE-2025-9231 is not relevant
+   - If not using HTTP client with no_proxy: CVE-2025-9232 is not relevant
+
+**Future Enhancement:**
+
+Create an ECR CloudFormation stack (`05-ecr.yaml`):
+
+```yaml
+# Future: stacks/05-ecr.yaml
+Resources:
+  BackendRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${ProjectName}/backend'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: MUTABLE
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Keep last 10 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+```
+
 ## Stack Dependencies
 
 Stacks must be deployed in this order due to dependencies:

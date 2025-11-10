@@ -192,6 +192,174 @@ stage('IaC Scan - tfsec') {
 
 ## 3. Container Image Scanning
 
+### AWS ECR Image Scanning (Native)
+
+**Purpose**: AWS-native container vulnerability scanning integrated with ECR.
+
+**What it Detects**:
+- OS package vulnerabilities (using CVE database)
+- Known security vulnerabilities in base images
+- Updated daily from public CVE databases
+- Integration with AWS Security Hub
+
+**Setup**:
+```bash
+# Create ECR repository with scan-on-push enabled
+aws ecr create-repository \
+  --repository-name cloudforge/backend \
+  --image-scanning-configuration scanOnPush=true \
+  --region us-east-1
+
+# Enable scanning for existing repository
+aws ecr put-image-scanning-configuration \
+  --repository-name cloudforge/backend \
+  --image-scanning-configuration scanOnPush=true
+```
+
+**Usage**:
+```bash
+# Scans automatically on push when scanOnPush=true
+docker push ${ECR_REGISTRY}/cloudforge/backend:latest
+
+# Or manually trigger scan
+aws ecr start-image-scan \
+  --repository-name cloudforge/backend \
+  --image-id imageTag=latest
+
+# View scan results summary
+aws ecr describe-image-scan-findings \
+  --repository-name cloudforge/backend \
+  --image-id imageTag=latest \
+  --query 'imageScanFindings.findingSeverityCounts'
+
+# View detailed findings
+aws ecr describe-image-scan-findings \
+  --repository-name cloudforge/backend \
+  --image-id imageTag=latest \
+  --query 'imageScanFindings.findings[?severity==`HIGH` || severity==`CRITICAL`].[name,severity,description]' \
+  --output table
+
+# List all images with scan status
+aws ecr describe-images \
+  --repository-name cloudforge/backend \
+  --query 'imageDetails[*].[imageTags[0],imageScanStatus.status,imageScanFindingsSummary.findingSeverityCounts]' \
+  --output table
+```
+
+**Real-World Example - CloudForge Backend Scan Results:**
+
+After pushing images to ECR, the following vulnerabilities were detected in the Alpine-based Node.js image:
+
+```json
+{
+  "HIGH": 1,
+  "MEDIUM": 2
+}
+```
+
+**Detailed Findings:**
+
+1. **CVE-2025-9230 (HIGH)**
+   - Component: OpenSSL
+   - Description: CMS password-based encryption out-of-bounds read/write
+   - Impact: Potential DoS or code execution
+   - Severity Rationale: While technically severe, CMS PWRI encryption is rarely used
+   - Remediation: Update Alpine base image when patch available
+
+2. **CVE-2025-9231 (MEDIUM)**
+   - Component: OpenSSL
+   - Description: SM2 signature timing side-channel on ARM64 platforms
+   - Impact: Potential private key recovery
+   - Severity Rationale: Requires custom TLS provider and ARM64 platform
+   - Remediation: Update OpenSSL or use non-ARM platforms
+
+3. **CVE-2025-9232 (MEDIUM)**
+   - Component: OpenSSL
+   - Description: HTTP client no_proxy environment variable vulnerability
+   - Impact: Out-of-bounds read leading to DoS
+   - Severity Rationale: Requires specific no_proxy configuration
+   - Remediation: Update to OpenSSL 3.0.17+, 3.1.9+, 3.2.5+, 3.3.4+, 3.4.1+, or 3.5.1+
+
+**Remediation Workflow:**
+
+```bash
+# 1. Check for updated base image
+docker pull node:18-alpine
+docker pull alpine:3.20
+
+# 2. Update Dockerfile
+cat > docker/backend/Dockerfile <<'EOF'
+FROM node:18-alpine3.20
+# ... rest of Dockerfile
+EOF
+
+# 3. Rebuild and push
+docker build -t backend:latest -f docker/backend/Dockerfile .
+docker tag backend:latest ${ECR_REGISTRY}/cloudforge/backend:latest
+docker push ${ECR_REGISTRY}/cloudforge/backend:latest
+
+# 4. Verify new scan results
+aws ecr wait image-scan-complete \
+  --repository-name cloudforge/backend \
+  --image-id imageTag=latest
+
+aws ecr describe-image-scan-findings \
+  --repository-name cloudforge/backend \
+  --image-id imageTag=latest
+```
+
+**Integration with CI/CD:**
+
+```groovy
+// Add to Jenkinsfile after pushing to ECR
+stage('ECR Security Scan') {
+    steps {
+        script {
+            // Wait for scan to complete
+            sh '''
+                aws ecr wait image-scan-complete \
+                  --repository-name cloudforge/backend \
+                  --image-id imageTag=${IMAGE_TAG}
+            '''
+
+            // Get scan results
+            def scanResults = sh(
+                script: '''
+                    aws ecr describe-image-scan-findings \
+                      --repository-name cloudforge/backend \
+                      --image-id imageTag=${IMAGE_TAG} \
+                      --query 'imageScanFindings.findingSeverityCounts'
+                ''',
+                returnStdout: true
+            ).trim()
+
+            // Parse and evaluate
+            def findings = readJSON text: scanResults
+            if (findings.CRITICAL > 0 || findings.HIGH > 5) {
+                error("Security vulnerabilities found: ${findings}")
+            }
+        }
+    }
+}
+```
+
+**Comparison: ECR vs Trivy:**
+
+| Feature | AWS ECR Scan | Trivy |
+|---------|-------------|-------|
+| Cost | Free (included) | Free |
+| Database | AWS-managed CVE | Trivy database |
+| Update Frequency | Daily | Hourly |
+| OS Coverage | Amazon Linux, Alpine, Debian, Ubuntu, etc. | Comprehensive |
+| Speed | Moderate (cloud-based) | Fast (local) |
+| Integration | Native AWS | CLI/Docker |
+| Reports | AWS Console/CLI | JSON/HTML/SARIF |
+| CI/CD | Easy (AWS native) | Easy (any platform) |
+
+**Recommendation**: Use **both** for defense-in-depth:
+- ECR scanning for AWS-native integration and compliance
+- Trivy for pre-push validation and broader coverage
+
 ### Trivy (Container Vulnerability Scanner)
 
 **Purpose**: Scan Docker images for OS and application vulnerabilities before deployment.
@@ -494,14 +662,15 @@ pipeline {
 
 ## Tool Comparison
 
-| Tool | Type | Speed | Accuracy | False Positives | Cost |
-|------|------|-------|----------|-----------------|------|
-| SonarQube | SAST | Medium | High | Low | Free (CE) |
-| Snyk | SCA | Fast | Very High | Very Low | Freemium |
-| Checkov | IaC | Fast | High | Low | Free |
-| tfsec | IaC | Very Fast | High | Low | Free |
-| Trivy | Container | Fast | High | Low | Free |
-| OWASP ZAP | DAST | Slow | Medium | Medium | Free |
+| Tool | Type | Speed | Accuracy | False Positives | Cost | Best For |
+|------|------|-------|----------|-----------------|------|----------|
+| SonarQube | SAST | Medium | High | Low | Free (CE) | Code quality & security |
+| Snyk | SCA | Fast | Very High | Very Low | Freemium | Dependency vulnerabilities |
+| Checkov | IaC | Fast | High | Low | Free | Multi-cloud IaC scanning |
+| tfsec | IaC | Very Fast | High | Low | Free | Terraform-specific checks |
+| ECR Scan | Container | Medium | High | Low | Free | AWS-native integration |
+| Trivy | Container | Fast | High | Low | Free | Pre-push validation |
+| OWASP ZAP | DAST | Slow | Medium | Medium | Free | Runtime testing |
 
 ## Resources
 
