@@ -1,4 +1,4 @@
-# AWS DevOps Portfolio Project with Jenkins & Security Scanning
+# AWS CloudForge Project with Jenkins & Security Scanning
 
 A comprehensive DevOps portfolio project demonstrating AWS services, containerization, CI/CD with Jenkins, and security best practices.
 
@@ -105,7 +105,7 @@ terraform apply
 ```bash
 cd infrastructure/cloudformation
 aws cloudformation create-stack \
-  --stack-name devops-portfolio-vpc \
+  --stack-name cloudforge-vpc \
   --template-body file://vpc.yaml
 ```
 

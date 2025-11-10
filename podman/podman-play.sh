@@ -1,5 +1,5 @@
 #!/bin/bash
-# Podman play kube script for DevOps Portfolio
+# Podman play kube script for CloudForge
 # This script deploys the application using Podman's Kubernetes YAML support
 
 set -e
@@ -10,7 +10,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Starting DevOps Portfolio with Podman Play Kube${NC}"
+echo -e "${GREEN}Starting CloudForge with Podman Play Kube${NC}"
 
 # Navigate to the podman directory
 cd "$(dirname "$0")"
@@ -29,13 +29,13 @@ fi
 
 # Stop and remove existing pod
 echo -e "${YELLOW}Stopping existing pod if running...${NC}"
-podman pod stop devops-portfolio 2>/dev/null || true
-podman pod rm devops-portfolio 2>/dev/null || true
-podman kube down devops-portfolio-pod.yaml 2>/dev/null || true
+podman pod stop cloudforge 2>/dev/null || true
+podman pod rm cloudforge 2>/dev/null || true
+podman kube down cloudforge-pod.yaml 2>/dev/null || true
 
 # Deploy using play kube
 echo -e "${GREEN}Deploying pod with play kube...${NC}"
-podman play kube devops-portfolio-pod.yaml
+podman play kube cloudforge-pod.yaml
 
 # Wait for services to be ready
 echo -e "${YELLOW}Waiting for services to be ready...${NC}"
@@ -45,7 +45,7 @@ sleep 15
 echo -e "${GREEN}Checking pod status...${NC}"
 podman pod ps
 echo ""
-podman ps --filter pod=devops-portfolio
+podman ps --filter pod=cloudforge
 
 echo ""
 echo -e "${GREEN}Deployment complete!${NC}"
@@ -56,10 +56,10 @@ echo -e "  ${GREEN}Backend API:${NC} http://localhost:3001/api/health"
 echo -e "  ${GREEN}PostgreSQL:${NC} localhost:5433"
 echo ""
 echo "Useful commands:"
-echo "  podman pod logs devops-portfolio                    # View all pod logs"
-echo "  podman logs devops-portfolio-frontend               # View frontend logs"
-echo "  podman logs devops-portfolio-backend                # View backend logs"
-echo "  podman logs devops-portfolio-postgres               # View database logs"
-echo "  podman pod stop devops-portfolio                    # Stop the pod"
-echo "  podman pod start devops-portfolio                   # Start the pod"
-echo "  podman kube down devops-portfolio-pod.yaml          # Remove the pod"
+echo "  podman pod logs cloudforge                    # View all pod logs"
+echo "  podman logs cloudforge-frontend               # View frontend logs"
+echo "  podman logs cloudforge-backend                # View backend logs"
+echo "  podman logs cloudforge-postgres               # View database logs"
+echo "  podman pod stop cloudforge                    # Stop the pod"
+echo "  podman pod start cloudforge                   # Start the pod"
+echo "  podman kube down cloudforge-pod.yaml          # Remove the pod"

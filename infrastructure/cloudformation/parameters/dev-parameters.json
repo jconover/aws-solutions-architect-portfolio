@@ -1,0 +1,42 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "cloudforge"
+  },
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "VpcCIDR",
+    "ParameterValue": "10.20.0.0/16"
+  },
+  {
+    "ParameterKey": "EnableVpcFlowLogs",
+    "ParameterValue": "true"
+  },
+  {
+    "ParameterKey": "EnableNatGateway",
+    "ParameterValue": "true"
+  },
+  {
+    "ParameterKey": "DBInstanceClass",
+    "ParameterValue": "db.t3.micro"
+  },
+  {
+    "ParameterKey": "DBAllocatedStorage",
+    "ParameterValue": "20"
+  },
+  {
+    "ParameterKey": "DBUsername",
+    "ParameterValue": "dbadmin"
+  },
+  {
+    "ParameterKey": "DBPassword",
+    "ParameterValue": "REPLACE_WITH_SECURE_PASSWORD"
+  },
+  {
+    "ParameterKey": "MultiAZ",
+    "ParameterValue": "false"
+  }
+]

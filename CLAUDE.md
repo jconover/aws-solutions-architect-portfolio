@@ -100,8 +100,8 @@ aws ecr get-login-password --region $AWS_REGION | \
     docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
 # Tag and push (replace ACCOUNT_ID)
-docker tag devops-backend:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/devops-portfolio/backend:latest
-docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/devops-portfolio/backend:latest
+docker tag devops-backend:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/cloudforge/backend:latest
+docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/cloudforge/backend:latest
 ```
 
 ### Security Scanning (Local)
@@ -140,7 +140,7 @@ psql -h <rds-endpoint> -U dbadmin -d appdb -f application/database/init.sql
 
 ```bash
 # Configure kubectl for EKS cluster
-aws eks update-kubeconfig --name devops-portfolio-cluster --region us-east-1
+aws eks update-kubeconfig --name cloudforge-cluster --region us-east-1
 
 # Update image references in manifests (replace ACCOUNT_ID)
 find kubernetes/ -name "*.yaml" -exec sed -i "s/ACCOUNT_ID/${AWS_ACCOUNT_ID}/g" {} \;
@@ -251,7 +251,7 @@ Required Jenkins plugins:
 ## Common Troubleshooting
 
 ### ECS Tasks Fail to Start
-- Check CloudWatch logs: `aws logs tail /ecs/devops-portfolio --follow`
+- Check CloudWatch logs: `aws logs tail /ecs/cloudforge --follow`
 - Verify task execution role has permissions for ECR, Secrets Manager, CloudWatch
 - Ensure security groups allow traffic between ALB and tasks
 

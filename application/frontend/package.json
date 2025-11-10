@@ -1,7 +1,7 @@
 {
-  "name": "devops-portfolio-frontend",
+  "name": "cloudforge-frontend",
   "version": "1.0.0",
-  "description": "Frontend for DevOps Portfolio Project",
+  "description": "Frontend for CloudForge Project",
   "scripts": {
     "build": "webpack --mode production",
     "dev": "webpack serve --mode development",

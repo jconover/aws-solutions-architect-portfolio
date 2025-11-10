@@ -13,7 +13,7 @@ terraform {
   # Optional: Configure remote backend for state management
   # backend "s3" {
   #   bucket         = "your-terraform-state-bucket"
-  #   key            = "aws-devops-portfolio/dev/terraform.tfstate"
+  #   key            = "aws-cloudforge/dev/terraform.tfstate"
   #   region         = "us-east-1"
   #   encrypt        = true
   #   dynamodb_table = "terraform-state-lock"
@@ -28,7 +28,7 @@ provider "aws" {
       Project     = var.project_name
       Environment = var.environment
       ManagedBy   = "Terraform"
-      Repository  = "aws-devops-portfolio"
+      Repository  = "aws-cloudforge"
     }
   }
 }

@@ -1,7 +1,7 @@
 # Example Terraform Variables File
 # Copy this file to terraform.tfvars and update with your values
 
-project_name = "devops-portfolio"
+project_name = "cloudforge"
 environment  = "dev"
 aws_region   = "us-east-1"
 

@@ -1,5 +1,5 @@
-# Podman Pod Configuration for DevOps Portfolio
-# Usage: podman play kube devops-portfolio-pod.yaml
+# Podman Pod Configuration for CloudForge
+# Usage: podman play kube cloudforge-pod.yaml
 #
 # This creates a single pod with three containers:
 # - PostgreSQL database
@@ -11,9 +11,9 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: devops-portfolio
+  name: cloudforge
   labels:
-    app: devops-portfolio
+    app: cloudforge
 spec:
   # Shared network namespace - all containers can talk via localhost
   hostNetwork: false
@@ -24,7 +24,7 @@ spec:
     image: postgres:15-alpine
     env:
     - name: POSTGRES_DB
-      value: devops_portfolio
+      value: cloudforge
     - name: POSTGRES_USER
       value: dbadmin
     - name: POSTGRES_PASSWORD
@@ -59,7 +59,7 @@ spec:
     - name: DB_PORT
       value: "5432"
     - name: DB_NAME
-      value: devops_portfolio
+      value: cloudforge
     - name: DB_USER
       value: dbadmin
     - name: DB_PASSWORD

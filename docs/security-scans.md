@@ -30,7 +30,7 @@ Code Commit → SAST → Dependency Check → IaC Scan → Build → Container S
 **Configuration**:
 ```properties
 # sonar-project.properties
-sonar.projectKey=aws-devops-portfolio
+sonar.projectKey=aws-cloudforge
 sonar.sources=./application
 sonar.exclusions=**/node_modules/**,**/*.test.js
 sonar.javascript.lcov.reportPaths=coverage/lcov.info

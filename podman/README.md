@@ -1,6 +1,6 @@
 # Podman Deployment Guide
 
-This directory contains configurations for deploying the DevOps Portfolio application using Podman, a daemonless container engine that's compatible with Docker.
+This directory contains configurations for deploying the CloudForge application using Podman, a daemonless container engine that's compatible with Docker.
 
 ## Overview
 
@@ -100,17 +100,17 @@ podman build -t localhost/docker-backend:latest -f ../docker/backend/Dockerfile 
 podman build -t localhost/docker-frontend:latest -f ../docker/frontend/Dockerfile ..
 
 # Deploy the pod
-podman play kube devops-portfolio-pod.yaml
+podman play kube cloudforge-pod.yaml
 
 # Check pod status
 podman pod ps
-podman ps --filter pod=devops-portfolio
+podman ps --filter pod=cloudforge
 
 # View logs
-podman pod logs devops-portfolio
+podman pod logs cloudforge
 
 # Stop and remove pod
-podman kube down devops-portfolio-pod.yaml
+podman kube down cloudforge-pod.yaml
 ```
 
 **Access Points:**
@@ -151,7 +151,7 @@ To avoid conflicts with Docker and Kubernetes deployments:
 ```
 podman/
 ├── README.md                      # This file
-├── devops-portfolio-pod.yaml      # Kubernetes YAML for Podman play kube
+├── cloudforge-pod.yaml      # Kubernetes YAML for Podman play kube
 ├── podman-compose.yml             # Compose file for podman-compose
 ├── nginx-podman.conf              # NGINX config for compose deployment
 ├── podman-up.sh                   # Helper script for compose deployment
@@ -186,32 +186,32 @@ podman-compose down -v
 
 ```bash
 # Deploy pod
-podman play kube devops-portfolio-pod.yaml
+podman play kube cloudforge-pod.yaml
 
 # List pods
 podman pod ps
 
 # View all containers in pod
-podman ps --filter pod=devops-portfolio
+podman ps --filter pod=cloudforge
 
 # View pod logs (all containers)
-podman pod logs devops-portfolio
+podman pod logs cloudforge
 
 # View specific container logs
-podman logs devops-portfolio-frontend
-podman logs devops-portfolio-backend
-podman logs devops-portfolio-postgres
+podman logs cloudforge-frontend
+podman logs cloudforge-backend
+podman logs cloudforge-postgres
 
 # Stop pod
-podman pod stop devops-portfolio
+podman pod stop cloudforge
 
 # Start pod
-podman pod start devops-portfolio
+podman pod start cloudforge
 
 # Remove pod
-podman kube down devops-portfolio-pod.yaml
+podman kube down cloudforge-pod.yaml
 # OR
-podman pod rm -f devops-portfolio
+podman pod rm -f cloudforge
 ```
 
 ## Troubleshooting
@@ -228,7 +228,7 @@ ports:
 ```
 
 **For Podman Play Kube:**
-Edit `devops-portfolio-pod.yaml` and change the hostPort:
+Edit `cloudforge-pod.yaml` and change the hostPort:
 ```yaml
 ports:
 - containerPort: 80
@@ -249,7 +249,7 @@ podman build -t localhost/docker-frontend:latest -f docker/frontend/Dockerfile .
 Wait 30 seconds after starting for PostgreSQL to initialize:
 ```bash
 # Check if PostgreSQL is ready
-podman exec devops-postgres pg_isready -U dbadmin -d devops_portfolio
+podman exec devops-postgres pg_isready -U dbadmin -d cloudforge
 ```
 
 ### Container Logs
@@ -261,8 +261,8 @@ podman-compose logs backend
 podman-compose logs postgres
 
 # Podman Play Kube
-podman logs devops-portfolio-backend
-podman logs devops-portfolio-postgres
+podman logs cloudforge-backend
+podman logs cloudforge-postgres
 ```
 
 ### Reset Everything
@@ -275,9 +275,9 @@ podman-compose up -d --build --force-recreate
 
 **Podman Play Kube:**
 ```bash
-podman kube down devops-portfolio-pod.yaml
+podman kube down cloudforge-pod.yaml
 podman volume rm postgres-data-pvc
-podman play kube devops-portfolio-pod.yaml
+podman play kube cloudforge-pod.yaml
 ```
 
 ## Comparison: Compose vs Play Kube

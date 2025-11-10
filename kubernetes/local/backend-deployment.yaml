@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: devops-portfolio
+  namespace: cloudforge
   labels:
     app: backend
     tier: api
@@ -79,7 +79,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend-service
-  namespace: devops-portfolio
+  namespace: cloudforge
   labels:
     app: backend
 spec:

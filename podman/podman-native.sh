@@ -10,7 +10,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Starting DevOps Portfolio with Native Podman${NC}"
+echo -e "${GREEN}Starting CloudForge with Native Podman${NC}"
 
 # Navigate to project root
 cd "$(dirname "$0")/.."
@@ -18,13 +18,13 @@ cd "$(dirname "$0")/.."
 # Stop and remove existing containers and pod
 echo -e "${YELLOW}Cleaning up existing resources...${NC}"
 podman rm -f devops-backend devops-frontend devops-postgres 2>/dev/null || true
-podman pod stop devops-portfolio 2>/dev/null || true
-podman pod rm devops-portfolio 2>/dev/null || true
+podman pod stop cloudforge 2>/dev/null || true
+podman pod rm cloudforge 2>/dev/null || true
 
 # Create a new pod with port mappings
 echo -e "${GREEN}Creating Podman pod...${NC}"
 podman pod create \
-  --name devops-portfolio \
+  --name cloudforge \
   --publish 8081:80 \
   --publish 3001:3000 \
   --publish 5433:5432
@@ -36,9 +36,9 @@ podman volume create postgres-data 2>/dev/null || true
 # Start PostgreSQL container
 echo -e "${GREEN}Starting PostgreSQL container...${NC}"
 podman run -d \
-  --pod devops-portfolio \
+  --pod cloudforge \
   --name devops-postgres \
-  -e POSTGRES_DB=devops_portfolio \
+  -e POSTGRES_DB=cloudforge \
   -e POSTGRES_USER=dbadmin \
   -e POSTGRES_PASSWORD=securepassword123 \
   -v postgres-data:/var/lib/postgresql/data \
@@ -52,13 +52,13 @@ sleep 10
 # Start backend container
 echo -e "${GREEN}Starting backend container...${NC}"
 podman run -d \
-  --pod devops-portfolio \
+  --pod cloudforge \
   --name devops-backend \
   -e PORT=3000 \
   -e NODE_ENV=development \
   -e DB_HOST=localhost \
   -e DB_PORT=5432 \
-  -e DB_NAME=devops_portfolio \
+  -e DB_NAME=cloudforge \
   -e DB_USER=dbadmin \
   -e DB_PASSWORD=securepassword123 \
   localhost/docker-backend:latest
@@ -125,7 +125,7 @@ EOF
 # Start frontend container
 echo -e "${GREEN}Starting frontend container...${NC}"
 podman run -d \
-  --pod devops-portfolio \
+  --pod cloudforge \
   --name devops-frontend \
   -v "$(pwd)/podman/nginx-pod.conf:/etc/nginx/conf.d/nginx.conf:ro" \
   localhost/docker-frontend:latest
@@ -139,7 +139,7 @@ echo -e "${GREEN}Pod status:${NC}"
 podman pod ps
 echo ""
 echo -e "${GREEN}Container status:${NC}"
-podman ps --filter pod=devops-portfolio
+podman ps --filter pod=cloudforge
 
 echo ""
 echo -e "${GREEN}Deployment complete!${NC}"
@@ -151,13 +151,13 @@ echo -e "  ${GREEN}PostgreSQL:${NC} localhost:5433"
 echo ""
 echo "Useful commands:"
 echo "  podman pod ps                              # List pods"
-echo "  podman ps --filter pod=devops-portfolio    # List containers in pod"
+echo "  podman ps --filter pod=cloudforge    # List containers in pod"
 echo "  podman logs devops-frontend                # View frontend logs"
 echo "  podman logs devops-backend                 # View backend logs"
 echo "  podman logs devops-postgres                # View database logs"
-echo "  podman pod stop devops-portfolio           # Stop the pod"
-echo "  podman pod start devops-portfolio          # Start the pod"
-echo "  podman pod rm -f devops-portfolio          # Remove the pod"
+echo "  podman pod stop cloudforge           # Stop the pod"
+echo "  podman pod start cloudforge          # Start the pod"
+echo "  podman pod rm -f cloudforge          # Remove the pod"
 echo ""
 echo "Test the deployment:"
 echo "  curl http://localhost:8081/api/health"

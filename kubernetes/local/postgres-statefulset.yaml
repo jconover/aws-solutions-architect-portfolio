@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres-service
-  namespace: devops-portfolio
+  namespace: cloudforge
   labels:
     app: postgres
 spec:
@@ -18,7 +18,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
-  namespace: devops-portfolio
+  namespace: cloudforge
 spec:
   serviceName: postgres-service
   replicas: 1

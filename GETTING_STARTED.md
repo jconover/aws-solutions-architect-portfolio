@@ -1,6 +1,6 @@
 # Getting Started Guide
 
-This guide will help you deploy the AWS DevOps Portfolio project to your AWS account.
+This guide will help you deploy the AWS CloudForge project to your AWS account.
 
 ## Prerequisites
 
@@ -96,13 +96,13 @@ docker-compose build
 
 # Tag and push images
 docker tag devops-backend:latest \
-    ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/devops-portfolio/backend:latest
+    ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/cloudforge/backend:latest
 
 docker tag devops-frontend:latest \
-    ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/devops-portfolio/frontend:latest
+    ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/cloudforge/frontend:latest
 
-docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/devops-portfolio/backend:latest
-docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/devops-portfolio/frontend:latest
+docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/cloudforge/backend:latest
+docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/cloudforge/frontend:latest
 ```
 
 ### Step 4: Initialize Database
@@ -250,10 +250,10 @@ aws ecr describe-repositories
 ### Issue: ECS tasks fail to start
 ```bash
 # Check task logs in CloudWatch
-aws logs tail /ecs/devops-portfolio --follow
+aws logs tail /ecs/cloudforge --follow
 
 # Check task definition
-aws ecs describe-task-definition --task-definition devops-portfolio-backend
+aws ecs describe-task-definition --task-definition cloudforge-backend
 ```
 
 ### Issue: Cannot connect to RDS
@@ -285,11 +285,11 @@ For development/testing:
 4. **Stop resources when not in use**:
    ```bash
    # Stop ECS services
-   aws ecs update-service --cluster devops-portfolio-cluster \
+   aws ecs update-service --cluster cloudforge-cluster \
        --service backend-service --desired-count 0
 
    # Stop RDS instance
-   aws rds stop-db-instance --db-instance-identifier devops-portfolio-db
+   aws rds stop-db-instance --db-instance-identifier cloudforge-db
    ```
 
 ## Cleanup
@@ -298,9 +298,9 @@ To delete all resources:
 
 ```bash
 # Delete ECS services first
-aws ecs delete-service --cluster devops-portfolio-cluster \
+aws ecs delete-service --cluster cloudforge-cluster \
     --service backend-service --force
-aws ecs delete-service --cluster devops-portfolio-cluster \
+aws ecs delete-service --cluster cloudforge-cluster \
     --service frontend-service --force
 
 # Destroy Terraform resources
@@ -309,11 +309,11 @@ terraform destroy
 
 # Delete ECR images
 aws ecr batch-delete-image \
-    --repository-name devops-portfolio/backend \
+    --repository-name cloudforge/backend \
     --image-ids imageTag=latest
 
 aws ecr batch-delete-image \
-    --repository-name devops-portfolio/frontend \
+    --repository-name cloudforge/frontend \
     --image-ids imageTag=latest
 ```
 

@@ -20,7 +20,7 @@ spec:
       serviceAccountName: backend-sa
       containers:
       - name: backend
-        image: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/devops-portfolio/backend:latest
+        image: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/cloudforge/backend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
@@ -80,4 +80,4 @@ metadata:
   name: backend-sa
   namespace: default
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/devops-portfolio-backend-role
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/cloudforge-backend-role

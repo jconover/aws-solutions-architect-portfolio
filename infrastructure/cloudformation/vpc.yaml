@@ -4,7 +4,7 @@ Description: 'VPC with public, private, and data subnets across 2 AZs'
 Parameters:
   ProjectName:
     Type: String
-    Default: devops-portfolio
+    Default: cloudforge
     Description: Project name for resource naming
 
   VpcCidr:

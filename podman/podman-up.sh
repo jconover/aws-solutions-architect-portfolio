@@ -1,5 +1,5 @@
 #!/bin/bash
-# Podman deployment script for DevOps Portfolio
+# Podman deployment script for CloudForge
 # This script starts the application using Podman Compose
 
 set -e
@@ -10,7 +10,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Starting DevOps Portfolio with Podman Compose${NC}"
+echo -e "${GREEN}Starting CloudForge with Podman Compose${NC}"
 
 # Check if podman-compose is installed
 if ! command -v podman-compose &> /dev/null; then

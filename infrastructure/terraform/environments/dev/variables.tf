@@ -3,7 +3,7 @@
 variable "project_name" {
   description = "Project name"
   type        = string
-  default     = "devops-portfolio"
+  default     = "cloudforge"
 }
 
 variable "environment" {

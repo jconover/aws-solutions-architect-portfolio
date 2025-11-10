@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: postgres-init
-  namespace: devops-portfolio
+  namespace: cloudforge
 data:
   init.sql: |
     -- Database initialization script

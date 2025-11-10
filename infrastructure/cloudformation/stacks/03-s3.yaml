@@ -1,0 +1,155 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'S3 Buckets for CloudForge - Artifacts, Logs, and Backups'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: cloudforge
+    Description: Project name used for resource naming
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+Resources:
+  # Artifacts Bucket (for build artifacts, deployment packages)
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-artifacts-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+          - Id: DeleteOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-artifacts'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: Artifacts
+
+  # Logs Bucket
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-logs-${AWS::AccountId}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: MoveToIA
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 365
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-logs'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: Logs
+
+  # Backups Bucket
+  BackupsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-backups-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: MoveToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 30
+          - Id: DeleteOldBackups
+            Status: Enabled
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-backups'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: Backups
+
+Outputs:
+  ArtifactsBucketName:
+    Description: Artifacts Bucket Name
+    Value: !Ref ArtifactsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ArtifactsBucketName'
+
+  ArtifactsBucketArn:
+    Description: Artifacts Bucket ARN
+    Value: !GetAtt ArtifactsBucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-ArtifactsBucketArn'
+
+  LogsBucketName:
+    Description: Logs Bucket Name
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LogsBucketName'
+
+  LogsBucketArn:
+    Description: Logs Bucket ARN
+    Value: !GetAtt LogsBucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-LogsBucketArn'
+
+  BackupsBucketName:
+    Description: Backups Bucket Name
+    Value: !Ref BackupsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-BackupsBucketName'
+
+  BackupsBucketArn:
+    Description: Backups Bucket ARN
+    Value: !GetAtt BackupsBucket.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-BackupsBucketArn'

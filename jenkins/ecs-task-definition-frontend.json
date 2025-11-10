@@ -1,15 +1,15 @@
 {
-  "family": "devops-portfolio-frontend",
+  "family": "cloudforge-frontend",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
   "memory": "512",
-  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/devops-portfolio-ecs-task-execution-role",
-  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/devops-portfolio-ecs-task-role",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/cloudforge-ecs-task-execution-role",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/cloudforge-ecs-task-role",
   "containerDefinitions": [
     {
       "name": "frontend",
-      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/devops-portfolio/frontend:latest",
+      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/cloudforge/frontend:latest",
       "essential": true,
       "portMappings": [
         {
@@ -26,7 +26,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/devops-portfolio",
+          "awslogs-group": "/ecs/cloudforge",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "frontend"
         }

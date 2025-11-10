@@ -1,4 +1,4 @@
-# Podman Compose Configuration for DevOps Portfolio
+# Podman Compose Configuration for CloudForge
 # Usage: podman-compose up -d
 #
 # This is compatible with both docker-compose and podman-compose
@@ -11,7 +11,7 @@ services:
     container_name: devops-postgres
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: devops_portfolio
+      POSTGRES_DB: cloudforge
       POSTGRES_USER: dbadmin
       POSTGRES_PASSWORD: securepassword123
     ports:
@@ -20,7 +20,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ../application/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dbadmin -d devops_portfolio"]
+      test: ["CMD-SHELL", "pg_isready -U dbadmin -d cloudforge"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,7 +39,7 @@ services:
       NODE_ENV: development
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: devops_portfolio
+      DB_NAME: cloudforge
       DB_USER: dbadmin
       DB_PASSWORD: securepassword123
     ports:
