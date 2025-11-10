@@ -34,6 +34,7 @@ echo "This includes:"
 echo "  - VPC and all networking resources"
 echo "  - RDS database (a snapshot will be created)"
 echo "  - S3 buckets (must be empty first)"
+echo "  - ECR repositories and all container images"
 echo "  - IAM roles and policies"
 echo ""
 read -p "Are you sure you want to continue? (type 'yes' to confirm): " -r
@@ -65,10 +66,34 @@ delete_stack() {
     echo ""
 }
 
-# Empty S3 buckets first
-echo -e "${YELLOW}Emptying S3 buckets...${NC}"
+# Get Account ID
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
+# Empty ECR repositories first
+echo -e "${YELLOW}Emptying ECR repositories...${NC}"
+for repo in "backend" "frontend"; do
+    REPO_NAME="${PROJECT_NAME}/${repo}"
+    if aws ecr describe-repositories --repository-names "$REPO_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
+        echo "Deleting images from repository: $REPO_NAME"
+        # Get all image IDs
+        IMAGE_IDS=$(aws ecr list-images --repository-name "$REPO_NAME" --region "$AWS_REGION" --query 'imageIds[*]' --output json)
+        if [ "$IMAGE_IDS" != "[]" ]; then
+            aws ecr batch-delete-image \
+                --repository-name "$REPO_NAME" \
+                --region "$AWS_REGION" \
+                --image-ids "$IMAGE_IDS" || true
+            echo "  Deleted all images from $REPO_NAME"
+        else
+            echo "  No images found in $REPO_NAME"
+        fi
+    else
+        echo "Repository $REPO_NAME does not exist, skipping"
+    fi
+done
+echo ""
+
+# Empty S3 buckets
+echo -e "${YELLOW}Emptying S3 buckets...${NC}"
 for bucket in "artifacts" "logs" "backups"; do
     BUCKET_NAME="${PROJECT_NAME}-${ENVIRONMENT}-${bucket}-${ACCOUNT_ID}"
     if aws s3 ls "s3://$BUCKET_NAME" 2>/dev/null; then
@@ -87,6 +112,7 @@ echo ""
 echo -e "${YELLOW}Deleting stacks in reverse order...${NC}"
 echo ""
 
+delete_stack "${PROJECT_NAME}-${ENVIRONMENT}-ecr"
 delete_stack "${PROJECT_NAME}-${ENVIRONMENT}-rds"
 delete_stack "${PROJECT_NAME}-${ENVIRONMENT}-s3"
 delete_stack "${PROJECT_NAME}-${ENVIRONMENT}-iam"

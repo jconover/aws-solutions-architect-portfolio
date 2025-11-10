@@ -8,26 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- AWS ECR (Elastic Container Registry) repositories for container image storage
+- **CloudFormation ECR Stack** (`05-ecr.yaml`):
+  - Managed ECR repositories for backend and frontend images
+  - Automatic security scanning on push (scanOnPush enabled)
+  - Lifecycle policies to manage storage costs (keep last 10 images, expire untagged after 1 day)
+  - AES256 encryption at rest
+  - CloudWatch alarms for high-severity vulnerabilities (production only)
+  - Stack exports for ECR repository URIs (for use in ECS/EKS stacks)
 - Automated `push-to-ecr.sh` script for building, tagging, and pushing Docker images
-- ECR scan-on-push enabled for automatic vulnerability scanning
-- Comprehensive ECR documentation in `docs/ECR_SETUP.md`
+- Comprehensive ECR documentation:
+  - `docs/ECR_SETUP.md` - Complete setup and usage guide
+  - `docs/ECR_DEPLOYMENT_SUMMARY.md` - Deployment summary with security findings
+  - `infrastructure/cloudformation/ECR_INTEGRATION.md` - CloudFormation integration guide
 - ECR security scanning integration in `docs/security-scans.md`
 - Security vulnerability tracking and remediation guidance
 
 ### Changed
-- Updated CloudFormation README with ECR setup instructions
-- Enhanced main README with ECR deployment steps
+- **Updated `deploy-all.sh`**: Now deploys 5 stacks (added ECR as step 5/5)
+- **Updated `delete-all.sh`**: Automatically empties ECR repositories and deletes ECR stack
+- Updated CloudFormation README with comprehensive ECR section
+- Enhanced main README with ECR deployment workflow (step 2)
 - Updated security scanning section to include ECR native scanning
 - Renumbered Getting Started sections for better flow
 
+### Fixed
+- ECR repositories now properly cleaned up by `delete-all.sh` (deletes all images before stack deletion)
+- Container images now managed by Infrastructure as Code (CloudFormation)
+
 ### Security
 - **Identified vulnerabilities** in backend Docker image (node:18-alpine base):
-  - CVE-2025-9230 (HIGH): OpenSSL CMS encryption vulnerability
-  - CVE-2025-9231 (MEDIUM): OpenSSL SM2 timing side-channel
-  - CVE-2025-9232 (MEDIUM): OpenSSL HTTP client no_proxy vulnerability
+  - CVE-2025-9230 (HIGH): OpenSSL CMS encryption vulnerability - Risk: LOW (feature not used)
+  - CVE-2025-9231 (MEDIUM): OpenSSL SM2 timing side-channel - Risk: LOW (requires ARM64)
+  - CVE-2025-9232 (MEDIUM): OpenSSL HTTP client no_proxy vulnerability - Risk: LOW (requires specific config)
 - Documented remediation steps and risk assessment for each CVE
 - Enabled automatic ECR security scanning on image push
+- All vulnerabilities assessed as LOW actual risk to application
 
 ## [1.0.0] - 2025-11-10
 
@@ -108,11 +123,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-AZ disabled for dev, enabled for prod
 - Performance Insights disabled for dev, enabled for prod
 
-**ECR Repositories**:
-- cloudforge/backend (scanOnPush enabled)
-- cloudforge/frontend (scanOnPush enabled)
-- AES256 encryption
+**ECR Stack (cloudforge-dev-ecr)**:
+- Backend repository: cloudforge/backend
+- Frontend repository: cloudforge/frontend
+- Automatic security scanning on push (scanOnPush enabled)
+- AES256 encryption at rest
+- Lifecycle policies:
+  - Delete untagged images after 1 day
+  - Keep last 10 images (configurable)
 - Mutable tags allowed
+- CloudWatch alarms for vulnerabilities (production only)
+- Exports repository URIs for ECS/EKS integration
 
 ### Deployment Methods
 

@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECR Repositories for CloudForge Container Images'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: cloudforge
+    Description: Project name used for resource naming
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+
+  ImageRetentionCount:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 100
+    Description: Number of images to retain in repository
+
+  UntaggedImageRetentionDays:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 365
+    Description: Days to retain untagged images before deletion
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'prod']
+
+Resources:
+  # Backend Repository
+  BackendRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${ProjectName}/backend'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: MUTABLE
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Expire untagged images after ${UntaggedImageRetentionDays} days",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": ${UntaggedImageRetentionDays}
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep last ${ImageRetentionCount} images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": ${ImageRetentionCount}
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-backend-repo'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Frontend Repository
+  FrontendRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${ProjectName}/frontend'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: MUTABLE
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Expire untagged images after ${UntaggedImageRetentionDays} days",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": ${UntaggedImageRetentionDays}
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep last ${ImageRetentionCount} images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": ${ImageRetentionCount}
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-frontend-repo'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # CloudWatch Alarm for High Severity Vulnerabilities (Backend)
+  BackendHighSeverityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-backend-high-vulnerabilities'
+      AlarmDescription: Alert when backend image has HIGH or CRITICAL vulnerabilities
+      MetricName: HighSeverityVulnerabilities
+      Namespace: !Sub '${ProjectName}/ECR'
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for High Severity Vulnerabilities (Frontend)
+  FrontendHighSeverityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-frontend-high-vulnerabilities'
+      AlarmDescription: Alert when frontend image has HIGH or CRITICAL vulnerabilities
+      MetricName: HighSeverityVulnerabilities
+      Namespace: !Sub '${ProjectName}/ECR'
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  BackendRepositoryUri:
+    Description: Backend ECR Repository URI
+    Value: !GetAtt BackendRepository.RepositoryUri
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-BackendRepositoryUri'
+
+  BackendRepositoryArn:
+    Description: Backend ECR Repository ARN
+    Value: !GetAtt BackendRepository.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-BackendRepositoryArn'
+
+  BackendRepositoryName:
+    Description: Backend ECR Repository Name
+    Value: !Ref BackendRepository
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-BackendRepositoryName'
+
+  FrontendRepositoryUri:
+    Description: Frontend ECR Repository URI
+    Value: !GetAtt FrontendRepository.RepositoryUri
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-FrontendRepositoryUri'
+
+  FrontendRepositoryArn:
+    Description: Frontend ECR Repository ARN
+    Value: !GetAtt FrontendRepository.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-FrontendRepositoryArn'
+
+  FrontendRepositoryName:
+    Description: Frontend ECR Repository Name
+    Value: !Ref FrontendRepository
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-FrontendRepositoryName'

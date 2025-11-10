@@ -108,11 +108,17 @@ deploy_stack \
     "${STACKS_DIR}/03-s3.yaml" \
     "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
 
-echo -e "${YELLOW}Step 4/4: Deploying RDS Stack${NC}"
+echo -e "${YELLOW}Step 4/5: Deploying RDS Stack${NC}"
 deploy_stack \
     "${PROJECT_NAME}-${ENVIRONMENT}-rds" \
     "${STACKS_DIR}/04-rds.yaml" \
     "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT ParameterKey=DBPassword,ParameterValue=$DB_PASSWORD"
+
+echo -e "${YELLOW}Step 5/5: Deploying ECR Stack${NC}"
+deploy_stack \
+    "${PROJECT_NAME}-${ENVIRONMENT}-ecr" \
+    "${STACKS_DIR}/05-ecr.yaml" \
+    "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}All stacks deployed successfully!${NC}"
@@ -134,9 +140,15 @@ aws cloudformation describe-stacks \
     --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
     --output table
 
+aws cloudformation describe-stacks \
+    --stack-name "${PROJECT_NAME}-${ENVIRONMENT}-ecr" \
+    --region "$AWS_REGION" \
+    --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
+    --output table
+
 echo ""
 echo "Next Steps:"
-echo "1. Build and push Docker images to ECR (create ECS/EKS stacks first)"
+echo "1. Build and push Docker images to ECR: ./push-to-ecr.sh"
 echo "2. Deploy ECS services: ./deploy-ecs.sh $ENVIRONMENT"
 echo "3. Deploy EKS cluster: ./deploy-eks.sh $ENVIRONMENT"
 echo ""
