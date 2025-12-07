@@ -1,6 +1,7 @@
 #!/bin/bash
 # Deploy all CloudFormation stacks in correct order
-# Usage: ./deploy-all.sh <environment> <db-password>
+# Usage: ./deploy-all.sh <environment>
+# Note: Database credentials are automatically managed by AWS Secrets Manager
 
 set -e
 
@@ -13,17 +14,10 @@ NC='\033[0m'
 # Configuration
 PROJECT_NAME="cloudforge"
 ENVIRONMENT="${1:-dev}"
-DB_PASSWORD="${2}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 STACKS_DIR="../stacks"
 
 # Validate inputs
-if [ -z "$DB_PASSWORD" ]; then
-    echo -e "${RED}Error: DB password is required${NC}"
-    echo "Usage: $0 <environment> <db-password>"
-    exit 1
-fi
-
 if [[ ! "$ENVIRONMENT" =~ ^(dev|staging|prod)$ ]]; then
     echo -e "${RED}Error: Environment must be dev, staging, or prod${NC}"
     exit 1
@@ -112,7 +106,7 @@ echo -e "${YELLOW}Step 4/6: Deploying RDS Stack${NC}"
 deploy_stack \
     "${PROJECT_NAME}-${ENVIRONMENT}-rds" \
     "${STACKS_DIR}/04-rds.yaml" \
-    "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT ParameterKey=DBPassword,ParameterValue=$DB_PASSWORD"
+    "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
 
 echo -e "${YELLOW}Step 5/6: Deploying ECR Stack${NC}"
 deploy_stack \
