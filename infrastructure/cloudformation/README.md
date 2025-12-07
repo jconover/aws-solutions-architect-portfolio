@@ -20,7 +20,9 @@ cloudformation/
 │   ├── 01-vpc.yaml           # VPC, subnets, NAT, IGW, Flow Logs
 │   ├── 02-iam.yaml           # IAM roles for ECS, EKS, Jenkins
 │   ├── 03-s3.yaml            # S3 buckets for artifacts, logs, backups
-│   └── 04-rds.yaml           # PostgreSQL RDS database
+│   ├── 04-rds.yaml           # PostgreSQL RDS database
+│   ├── 05-ecr.yaml           # ECR repositories for container images
+│   └── 06-ecs.yaml           # ECS Fargate cluster, ALB, services
 ├── parameters/
 │   └── dev-parameters.json   # Parameter files for each environment
 ├── scripts/
@@ -202,40 +204,36 @@ cd infrastructure/cloudformation/scripts
 - High connection count (> 80% of max)
 - Low free storage (< 2GB)
 
-### ECR (Elastic Container Registry) - Docker Image Storage
+### 05-ecr.yaml - Container Registry
 
-While not yet implemented as a CloudFormation stack, ECR repositories are required for storing and deploying Docker images to ECS/EKS.
+**Creates:**
+- **Backend ECR Repository**
+  - Image scanning on push
+  - AES256 encryption
+  - Lifecycle policy (keep last 10 images)
+  - Untagged image cleanup
 
-**Manual Setup (until ECR stack is created):**
+- **Frontend ECR Repository**
+  - Same features as backend
+  - Separate lifecycle management
 
-```bash
-# Create ECR repositories
-aws ecr create-repository \
-  --repository-name cloudforge/backend \
-  --image-scanning-configuration scanOnPush=true \
-  --region us-east-1
+- **CloudWatch Alarms** (production only)
+  - High severity vulnerability alerts
 
-aws ecr create-repository \
-  --repository-name cloudforge/frontend \
-  --image-scanning-configuration scanOnPush=true \
-  --region us-east-1
-```
+**Parameters:**
+- `ImageRetentionCount` - Number of images to retain (default: 10)
+- `UntaggedImageRetentionDays` - Days before untagged images expire (default: 1)
+
+**Exports:**
+- BackendRepositoryUri, BackendRepositoryArn, BackendRepositoryName
+- FrontendRepositoryUri, FrontendRepositoryArn, FrontendRepositoryName
 
 **Push Docker Images to ECR:**
-
-Use the provided script for automated image tagging and pushing:
 
 ```bash
 cd infrastructure/cloudformation/scripts
 ./push-to-ecr.sh
 ```
-
-The script will:
-1. Login to ECR
-2. Detect local Docker images
-3. Tag images with both `latest` and timestamp tags
-4. Push to ECR repositories
-5. Trigger automatic security scans
 
 **Manual Push Process:**
 
@@ -249,110 +247,93 @@ ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 aws ecr get-login-password --region ${AWS_REGION} | \
   docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-# Tag and push frontend
+# Tag and push
 docker tag docker-frontend:latest ${ECR_REGISTRY}/cloudforge/frontend:latest
 docker push ${ECR_REGISTRY}/cloudforge/frontend:latest
 
-# Tag and push backend
 docker tag docker-backend:latest ${ECR_REGISTRY}/cloudforge/backend:latest
 docker push ${ECR_REGISTRY}/cloudforge/backend:latest
 ```
 
-**Security Scanning:**
+### 06-ecs.yaml - Container Orchestration
 
-ECR automatically scans images on push when `scanOnPush=true` is enabled. View scan results:
+**Creates:**
+- **Application Load Balancer**
+  - Internet-facing, HTTP/HTTPS enabled
+  - Cross-zone load balancing
+  - Deletion protection (production)
 
+- **Target Groups**
+  - Frontend (port 80, /health)
+  - Backend (port 3000, /api/health)
+
+- **ECS Cluster**
+  - Fargate and Fargate Spot capacity providers
+  - Container Insights (optional)
+
+- **ECS Services**
+  - Frontend service with Nginx
+  - Backend service with Node.js
+  - Deployment circuit breaker with rollback
+
+- **Task Definitions**
+  - Fargate-compatible (awsvpc networking)
+  - CloudWatch logging
+  - Secrets Manager integration for DB password
+
+- **Auto Scaling** (production only)
+  - CPU-based target tracking (70% threshold)
+  - 2-10 task scaling range
+
+- **Security Groups**
+  - ALB SG: HTTP/HTTPS from internet
+  - ECS Tasks SG: Traffic only from ALB
+
+- **CloudWatch Alarms** (production only)
+  - High CPU utilization
+  - ALB 5XX errors
+
+**Parameters:**
+- `EnableContainerInsights` - Enable CloudWatch Container Insights (default: true)
+- `EnableFargateSpot` - Use Fargate Spot for cost savings (default: false)
+- `FrontendDesiredCount` - Number of frontend tasks (default: 2)
+- `BackendDesiredCount` - Number of backend tasks (default: 2)
+- `FrontendCPU/Memory` - Task resource allocation
+- `BackendCPU/Memory` - Task resource allocation
+- `LogRetentionDays` - CloudWatch log retention (default: 7)
+
+**Exports:**
+- ClusterName, ClusterArn
+- ALBDNSName, ALBArn, ALBHostedZoneId
+- FrontendTargetGroupArn, BackendTargetGroupArn
+- ALBSecurityGroupId, ECSTasksSecurityGroupId
+- FrontendServiceName, BackendServiceName
+- ECSLogGroupName, ApplicationURL
+
+**View Application:**
+
+After deployment, access the application at:
 ```bash
-# View vulnerability summary
-aws ecr describe-image-scan-findings \
-  --repository-name cloudforge/backend \
-  --image-id imageTag=latest \
-  --region us-east-1 \
-  --query 'imageScanFindings.findingSeverityCounts'
-
-# View detailed findings
-aws ecr describe-image-scan-findings \
-  --repository-name cloudforge/backend \
-  --image-id imageTag=latest \
-  --region us-east-1 \
-  --query 'imageScanFindings.findings[?severity==`HIGH` || severity==`CRITICAL`]'
+# Get the ALB DNS name
+aws cloudformation describe-stacks \
+  --stack-name cloudforge-dev-ecs \
+  --query 'Stacks[0].Outputs[?OutputKey==`ALBDNSName`].OutputValue' \
+  --output text
 ```
 
-**Known Security Findings (as of deployment):**
+**Monitor Services:**
 
-Backend image scan detected OpenSSL vulnerabilities in the Alpine Linux base image:
+```bash
+# View service status
+aws ecs describe-services \
+  --cluster cloudforge-dev-cluster \
+  --services cloudforge-dev-frontend cloudforge-dev-backend
 
-- **CVE-2025-9230 (HIGH)**: CMS password-based encryption vulnerability
-  - Impact: Potential DoS or code execution
-  - Mitigation: Update to newer Alpine image when available
-  - Risk: Low (feature rarely used)
+# View running tasks
+aws ecs list-tasks --cluster cloudforge-dev-cluster
 
-- **CVE-2025-9231 (MEDIUM)**: SM2 signature timing side-channel
-  - Impact: Potential private key recovery on ARM64
-  - Mitigation: Update Alpine base or disable SM2 if not needed
-  - Risk: Low (requires custom TLS provider)
-
-- **CVE-2025-9232 (MEDIUM)**: HTTP client no_proxy vulnerability
-  - Impact: DoS via out-of-bounds read
-  - Mitigation: Update Alpine base
-  - Risk: Low (requires specific environment config)
-
-**Recommended Actions:**
-
-1. **Monitor for Updates**: Watch for Alpine Linux security updates
-   ```bash
-   # Check for newer Alpine images
-   docker pull alpine:3.19
-   docker pull alpine:3.20
-   ```
-
-2. **Rebuild Images**: Update Dockerfile base image and rebuild
-   ```dockerfile
-   # In docker/backend/Dockerfile and docker/frontend/Dockerfile
-   FROM node:18-alpine3.20  # Update to latest secure version
-   ```
-
-3. **Rescan Regularly**: Set up automated scanning in CI/CD
-   ```bash
-   # Add to Jenkins pipeline
-   aws ecr start-image-scan \
-     --repository-name cloudforge/backend \
-     --image-id imageTag=latest
-   ```
-
-4. **Review CVE Details**: Assess actual risk based on your usage
-   - If not using CMS encryption: CVE-2025-9230 is not relevant
-   - If not on ARM64 platform: CVE-2025-9231 is not relevant
-   - If not using HTTP client with no_proxy: CVE-2025-9232 is not relevant
-
-**Future Enhancement:**
-
-Create an ECR CloudFormation stack (`05-ecr.yaml`):
-
-```yaml
-# Future: stacks/05-ecr.yaml
-Resources:
-  BackendRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Sub '${ProjectName}/backend'
-      ImageScanningConfiguration:
-        ScanOnPush: true
-      ImageTagMutability: MUTABLE
-      LifecyclePolicy:
-        LifecyclePolicyText: |
-          {
-            "rules": [{
-              "rulePriority": 1,
-              "description": "Keep last 10 images",
-              "selection": {
-                "tagStatus": "any",
-                "countType": "imageCountMoreThan",
-                "countNumber": 10
-              },
-              "action": { "type": "expire" }
-            }]
-          }
+# View logs
+aws logs tail /ecs/cloudforge-dev --follow
 ```
 
 ## Stack Dependencies
@@ -368,9 +349,11 @@ Stacks must be deployed in this order due to dependencies:
    ↓
 4. RDS (depends on VPC)
    ↓
-5. ECS (depends on VPC, IAM, S3) - Future
+5. ECR (no dependencies)
    ↓
-6. EKS (depends on VPC, IAM) - Future
+6. ECS (depends on VPC, IAM, RDS, ECR)
+   ↓
+7. EKS (depends on VPC, IAM) - Future
 ```
 
 Cross-stack references use CloudFormation Exports and Fn::ImportValue.
@@ -570,17 +553,20 @@ Approximate monthly costs for `dev` environment (us-east-1):
 | RDS db.t3.micro | $15/month |
 | S3 Storage (10GB) | $0.23/month |
 | VPC Flow Logs | $1-5/month |
-| **Total** | **~$50/month** |
+| ALB | $16/month + $0.008/LCU-hour |
+| ECS Fargate (2x 0.25vCPU/0.5GB) | ~$15/month |
+| ECR Storage | $0.10/GB/month |
+| **Total** | **~$80-100/month** |
 
-For `prod` with Multi-AZ and larger instances: ~$150-200/month
+For `prod` with Multi-AZ, auto-scaling, and larger instances: ~$200-400/month
 
 ## Next Steps
 
-1. **Create ECS/EKS stacks** for container orchestration
+1. **Create EKS stack** for Kubernetes orchestration
 2. **Add WAF stack** for web application firewall
 3. **Create Route 53 stack** for DNS management
 4. **Add CloudFront stack** for CDN
-5. **Implement nested stacks** for better organization
+5. **Add HTTPS/TLS** with ACM certificates
 6. **Add CI/CD pipeline** with CodePipeline/CodeBuild
 
 ## Additional Resources

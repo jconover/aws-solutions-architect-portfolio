@@ -90,34 +90,40 @@ deploy_stack() {
 }
 
 # Deploy stacks in order
-echo -e "${YELLOW}Step 1/4: Deploying VPC Stack${NC}"
+echo -e "${YELLOW}Step 1/6: Deploying VPC Stack${NC}"
 deploy_stack \
     "${PROJECT_NAME}-${ENVIRONMENT}-vpc" \
     "${STACKS_DIR}/01-vpc.yaml" \
     "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
 
-echo -e "${YELLOW}Step 2/4: Deploying IAM Stack${NC}"
+echo -e "${YELLOW}Step 2/6: Deploying IAM Stack${NC}"
 deploy_stack \
     "${PROJECT_NAME}-${ENVIRONMENT}-iam" \
     "${STACKS_DIR}/02-iam.yaml" \
     "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
 
-echo -e "${YELLOW}Step 3/4: Deploying S3 Stack${NC}"
+echo -e "${YELLOW}Step 3/6: Deploying S3 Stack${NC}"
 deploy_stack \
     "${PROJECT_NAME}-${ENVIRONMENT}-s3" \
     "${STACKS_DIR}/03-s3.yaml" \
     "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
 
-echo -e "${YELLOW}Step 4/5: Deploying RDS Stack${NC}"
+echo -e "${YELLOW}Step 4/6: Deploying RDS Stack${NC}"
 deploy_stack \
     "${PROJECT_NAME}-${ENVIRONMENT}-rds" \
     "${STACKS_DIR}/04-rds.yaml" \
     "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT ParameterKey=DBPassword,ParameterValue=$DB_PASSWORD"
 
-echo -e "${YELLOW}Step 5/5: Deploying ECR Stack${NC}"
+echo -e "${YELLOW}Step 5/6: Deploying ECR Stack${NC}"
 deploy_stack \
     "${PROJECT_NAME}-${ENVIRONMENT}-ecr" \
     "${STACKS_DIR}/05-ecr.yaml" \
+    "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
+
+echo -e "${YELLOW}Step 6/6: Deploying ECS Stack${NC}"
+deploy_stack \
+    "${PROJECT_NAME}-${ENVIRONMENT}-ecs" \
+    "${STACKS_DIR}/06-ecs.yaml" \
     "ParameterKey=ProjectName,ParameterValue=$PROJECT_NAME ParameterKey=Environment,ParameterValue=$ENVIRONMENT"
 
 echo -e "${GREEN}========================================${NC}"
@@ -146,11 +152,29 @@ aws cloudformation describe-stacks \
     --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
     --output table
 
+aws cloudformation describe-stacks \
+    --stack-name "${PROJECT_NAME}-${ENVIRONMENT}-ecs" \
+    --region "$AWS_REGION" \
+    --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
+    --output table
+
+# Get the application URL
+ALB_DNS=$(aws cloudformation describe-stacks \
+    --stack-name "${PROJECT_NAME}-${ENVIRONMENT}-ecs" \
+    --region "$AWS_REGION" \
+    --query 'Stacks[0].Outputs[?OutputKey==`ALBDNSName`].OutputValue' \
+    --output text)
+
+echo ""
+echo -e "${GREEN}Application URL: http://${ALB_DNS}${NC}"
 echo ""
 echo "Next Steps:"
 echo "1. Build and push Docker images to ECR: ./push-to-ecr.sh"
-echo "2. Deploy ECS services: ./deploy-ecs.sh $ENVIRONMENT"
-echo "3. Deploy EKS cluster: ./deploy-eks.sh $ENVIRONMENT"
+echo "2. ECS services will automatically pull from ECR (task definitions use :latest tag)"
+echo "3. (Optional) Deploy EKS cluster: ./deploy-eks.sh $ENVIRONMENT"
+echo ""
+echo "To view ECS service status:"
+echo "  aws ecs describe-services --cluster ${PROJECT_NAME}-${ENVIRONMENT}-cluster --services ${PROJECT_NAME}-${ENVIRONMENT}-frontend ${PROJECT_NAME}-${ENVIRONMENT}-backend"
 echo ""
 echo "To view all stack resources:"
-echo "  aws cloudformation describe-stack-resources --stack-name ${PROJECT_NAME}-${ENVIRONMENT}-vpc"
+echo "  aws cloudformation describe-stack-resources --stack-name ${PROJECT_NAME}-${ENVIRONMENT}-ecs"

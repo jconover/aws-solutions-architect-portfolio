@@ -31,6 +31,8 @@ echo -e "${RED}========================================${NC}"
 echo ""
 echo -e "${YELLOW}WARNING: This will delete all resources!${NC}"
 echo "This includes:"
+echo "  - ECS cluster, services, and task definitions"
+echo "  - Application Load Balancer"
 echo "  - VPC and all networking resources"
 echo "  - RDS database (a snapshot will be created)"
 echo "  - S3 buckets (must be empty first)"
@@ -108,10 +110,11 @@ for bucket in "artifacts" "logs" "backups"; do
 done
 echo ""
 
-# Delete stacks in reverse order
+# Delete stacks in reverse order (ECS first since it depends on other stacks)
 echo -e "${YELLOW}Deleting stacks in reverse order...${NC}"
 echo ""
 
+delete_stack "${PROJECT_NAME}-${ENVIRONMENT}-ecs"
 delete_stack "${PROJECT_NAME}-${ENVIRONMENT}-ecr"
 delete_stack "${PROJECT_NAME}-${ENVIRONMENT}-rds"
 delete_stack "${PROJECT_NAME}-${ENVIRONMENT}-s3"

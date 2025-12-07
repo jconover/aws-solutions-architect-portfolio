@@ -53,10 +53,10 @@ module "vpc" {
   private_subnet_cidrs = var.private_subnet_cidrs
   data_subnet_cidrs    = var.data_subnet_cidrs
 
-  enable_nat_gateway  = var.enable_nat_gateway
-  single_nat_gateway  = var.single_nat_gateway
-  enable_s3_endpoint  = var.enable_s3_endpoint
-  enable_flow_logs    = false
+  enable_nat_gateway = var.enable_nat_gateway
+  single_nat_gateway = var.single_nat_gateway
+  enable_s3_endpoint = var.enable_s3_endpoint
+  enable_flow_logs   = false
 
   aws_region  = var.aws_region
   common_tags = local.common_tags
@@ -69,10 +69,10 @@ module "s3" {
   project_name = var.project_name
   environment  = var.environment
 
-  artifacts_retention_days       = var.artifacts_retention_days
-  logs_retention_days            = var.logs_retention_days
-  backups_retention_days         = var.backups_retention_days
-  create_static_assets_bucket    = true
+  artifacts_retention_days    = var.artifacts_retention_days
+  logs_retention_days         = var.logs_retention_days
+  backups_retention_days      = var.backups_retention_days
+  create_static_assets_bucket = true
 
   common_tags = local.common_tags
 }
@@ -175,11 +175,11 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  multi_az               = false # Enable for production
-  publicly_accessible    = false
+  multi_az                = false # Enable for production
+  publicly_accessible     = false
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "mon:04:00-mon:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "mon:04:00-mon:05:00"
 
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
 
