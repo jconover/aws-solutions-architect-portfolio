@@ -58,11 +58,13 @@ aws configure
 cd infrastructure/cloudformation/scripts
 
 # Deploy to dev environment
-./deploy-all.sh dev "YourSecurePassword123!"
+./deploy-all.sh dev
 
 # Deploy to production
-./deploy-all.sh prod "ProductionPassword456!"
+./deploy-all.sh prod
 ```
+
+> **Note:** Database credentials are automatically generated and stored in AWS Secrets Manager. No password input required.
 
 ### 2. View Stack Status
 
@@ -182,8 +184,10 @@ cd infrastructure/cloudformation/scripts
 - DB Subnet Group (spans data subnets)
 - Security Group (allows PostgreSQL from VPC)
 - CloudWatch Alarms (CPU, connections, storage)
+- **Secrets Manager Secret** for database credentials
 
 **Features:**
+- **AWS Secrets Manager integration** - Auto-generated 32-character password, no manual password input required
 - Automated backups (configurable retention)
 - Multi-AZ option for high availability
 - Performance Insights (production)
@@ -192,12 +196,73 @@ cd infrastructure/cloudformation/scripts
 - Encrypted storage
 - Automatic snapshots on deletion
 
+**Secrets Manager Integration:**
+
+The RDS stack uses AWS Secrets Manager for secure credential management:
+
+1. **Auto-generated password** - A 32-character password is generated automatically (excludes `"@/\` characters)
+2. **Secret structure** - Stores `username`, `password`, plus connection info (`host`, `port`, `dbname`, `engine`) after attachment
+3. **No manual password input** - The `DBPassword` parameter has been removed; credentials are fully managed by Secrets Manager
+
+**Retrieving Database Credentials:**
+
+```bash
+# Get the secret ARN
+SECRET_ARN=$(aws cloudformation describe-stacks \
+  --stack-name cloudforge-dev-rds \
+  --query 'Stacks[0].Outputs[?OutputKey==`DBSecretArn`].OutputValue' \
+  --output text)
+
+# Retrieve the secret value
+aws secretsmanager get-secret-value \
+  --secret-id $SECRET_ARN \
+  --query 'SecretString' \
+  --output text | jq .
+```
+
+**Using in ECS Task Definitions:**
+
+```json
+{
+  "containerDefinitions": [{
+    "secrets": [
+      {
+        "name": "DB_PASSWORD",
+        "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:cloudforge-dev-db-credentials:password::"
+      },
+      {
+        "name": "DB_USERNAME",
+        "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT:secret:cloudforge-dev-db-credentials:username::"
+      }
+    ]
+  }]
+}
+```
+
+**Using in Application Code (Node.js example):**
+
+```javascript
+const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+
+async function getDbCredentials() {
+  const client = new SecretsManagerClient({ region: 'us-east-1' });
+  const response = await client.send(new GetSecretValueCommand({
+    SecretId: process.env.DB_SECRET_ARN
+  }));
+  return JSON.parse(response.SecretString);
+}
+```
+
 **Parameters:**
 - `DBInstanceClass` - Default: db.t3.micro
 - `DBAllocatedStorage` - Default: 20GB
 - `DBUsername` - Default: dbadmin
-- `DBPassword` - Required (NoEcho)
 - `MultiAZ` - true/false
+
+**Exports:**
+- `DBSecretArn` - ARN of the Secrets Manager secret (use for ECS/EKS integration)
+- `DBSecretName` - Name of the secret (`cloudforge-{env}-db-credentials`)
+- `DBEndpoint`, `DBPort`, `DBName`, `DBSecurityGroupId`
 
 **CloudWatch Alarms:**
 - High CPU utilization (> 80%)
@@ -372,13 +437,11 @@ Create parameter files for each environment:
   {
     "ParameterKey": "Environment",
     "ParameterValue": "dev"
-  },
-  {
-    "ParameterKey": "DBPassword",
-    "ParameterValue": "SecurePassword123!"
   }
 ]
 ```
+
+> **Note:** Database credentials are now managed by AWS Secrets Manager automatically. No password parameter is required for the RDS stack.
 
 Deploy with parameter file:
 ```bash
@@ -391,7 +454,7 @@ aws cloudformation create-stack \
 ## Best Practices Implemented
 
 ### Security
-- ✅ All passwords use `NoEcho: true`
+- ✅ **Secrets Manager integration** for RDS credentials (auto-generated, auto-rotated)
 - ✅ IAM roles follow least privilege principle
 - ✅ S3 buckets block public access
 - ✅ Encryption at rest enabled for RDS and S3

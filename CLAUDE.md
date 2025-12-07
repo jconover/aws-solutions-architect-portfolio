@@ -183,7 +183,8 @@ sudo journalctl -u jenkins -f
 
 ### Environment Variables and Secrets
 
-- **Database password**: Never commit to code. Use `TF_VAR_db_password` environment variable for Terraform, or AWS Secrets Manager for production.
+- **Database password (Terraform)**: Never commit to code. Use `TF_VAR_db_password` environment variable.
+- **Database password (CloudFormation)**: Automatically generated and stored in AWS Secrets Manager. The RDS stack (`04-rds.yaml`) creates a secret at `cloudforge-{env}-db-credentials` with auto-generated credentials.
 - **ECS Task Definitions**: Reference secrets from AWS Secrets Manager using the `secrets` array (see `jenkins/ecs-task-definition-*.json`)
 - **Local Development**: Uses hardcoded password in `docker-compose.yml` for convenience (acceptable for local-only)
 
